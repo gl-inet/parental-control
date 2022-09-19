@@ -6,4 +6,4 @@ TOOS_CHAIN=/home/glinet/work/gl-infra-builder/mt7981/staging_dir/toolchain-aarch
 all:
 	make -C $(KDIR) M=$(PWD) modules CROSS_COMPILE=$(TOOS_CHAIN) ARCH=arm64
 clean:
-	rm -f *.ko *.o *.mod.o *.mod.c *.symvers *.bak *.order *.cmd *.mod
+	rm -f *.ko *.o *.mod.o *.mod.c *.symvers *.bak *.order *.cmd *.mod *.cmd

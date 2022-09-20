@@ -134,10 +134,10 @@ init_parental_control()
 config_load parental_control
 init_parental_control
 while true;do
-    sleep $INTERVAL
     get_current_status
     get_current_time
     schedule_for_each
+    sleep $INTERVAL
 done
 
 exit 0

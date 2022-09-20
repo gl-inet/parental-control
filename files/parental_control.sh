@@ -31,7 +31,7 @@ config_apply()
     test -z "$1" && return 1
     
 	if [ -e "/dev/parental_control" ];then
-    	[ "$DEBUG" = "1" ] && echo "config json str=$1"
+    	#[ "$DEBUG" = "1" ] && echo "config json str=$1"
     	echo "$1" >/dev/parental_control
 	fi
 }

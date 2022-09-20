@@ -9,6 +9,11 @@ local rpc = require "oui.rpc"
 local ubus = require "ubus"
 local uci = require "uci"
 
+local function apply()
+    os.execute("/etc/init.d/parental-control restart")
+end
+
+
 --[[
     @method-type: call
     @method-name: get_app_list
@@ -24,8 +29,24 @@ local uci = require "uci"
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"apps":[{"id":8001,"name":"baidu","type":8,},{"id":1002,"name":"facebook","type":1,}]}}
 --]]
 M.get_app_list = function()
+    local ret = {}
+    local apps = {}
 
-    return {"apps":[{"id":8001,"name":"baidu","type":8,},{"id":1002,"name":"facebook","type":1,}]}
+    for line in io.lines("/proc/parental-control/app") do
+        local fields = {}
+        local app = {}
+        for field in line:gmatch("[^\t]+") do
+            fields[#fields + 1] = field
+        end
+        if fields[1] ~= "ID" then 
+            app["id"] = fields[1]
+            app["name"] = fields[2]
+            app["type"] = math.floor(tonumber(fields[1])/1000)
+            apps[#apps + 1] = app
+        end
+    end
+    ret["apps"] = apps
+    return ret
 end
 
 --[[
@@ -46,7 +67,27 @@ end
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_group",{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
-M.add_group = function()
+M.add_group = function(params)
+    local c = uci.cursor()
+
+    local sid = c:add("parental_control", "group")
+    c:set("parental_control", sid, "name", params.name)
+    c:set("parental_control", sid, "default_rule", params.default_rule)
+    if type(params.macs) == "table" and #params.macs ~= 0  then
+        c:set("parental_control", sid, "macs",params.macs)
+    end
+    if type(params.schedules) == "table" and #params.schedules ~= 0  then
+        for i = 1, #params.schedules do
+            local sche = c:add("parental_control", "schedule")
+            c:set("parental_control", sche, "group",sid)
+            c:set("parental_control", sche, "week",tostring(params.schedules[i].week))
+            c:set("parental_control", sche, "begin",params.schedules[i].begin)
+            c:set("parental_control", sche, "end",params.schedules[i]["end"])
+            c:set("parental_control", sche, "rule",params.schedules[i].rule)
+        end
+    end
+    c:commit("parental_control")
+    apply()
 
     return {}
 end
@@ -62,7 +103,19 @@ end
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","remove_group",{"id":"cfga01234b"}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
-M.remove_group = function()
+M.remove_group = function(params)
+    local c = uci.cursor()
+
+    if params.id then
+        c:delete("parental_control", params.id)
+    end
+    c:foreach("parental_control", "schedule", function(s)
+        if s.group and s.group ==params.id then 
+            c:delete("parental_control", s[".name"]) 
+        end
+    end)
+    c:commit("parental_control")
+    apply()
 
     return {}
 end
@@ -86,7 +139,38 @@ end
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_group",{"id":"cfga01234b","name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
-M.set_group = function()
+M.set_group = function(params)
+    local c = uci.cursor()
+
+    local sid = params.id
+    c:set("parental_control", sid, "name", params.name)
+    c:set("parental_control", sid, "default_rule", params.default_rule)
+    if type(params.macs) == "table" and #params.macs ~= 0  then
+        c:set("parental_control", sid, "macs",params.macs)
+    else
+        c:delete("parental_control", sid, "macs")
+    end
+
+    -- 先删除旧的日程
+    c:foreach("parental_control", "schedule", function(s)
+        if s.group and s.group ==params.id then 
+            c:delete("parental_control", s[".name"])
+        end
+    end)
+    -- 添加新日程
+    if type(params.schedules) == "table" and #params.schedules ~= 0  then
+        for i = 1, #params.schedules do
+            local sche = c:add("parental_control", "schedule")
+            c:set("parental_control", sche, "group",sid)
+            c:set("parental_control", sche, "week",tostring(params.schedules.week))
+            c:set("parental_control", sche, "begin",params.schedules.begin)
+            c:set("parental_control", sche, "end",params.schedules["end"])
+            c:set("parental_control", sche, "rule",params.schedules.rule)
+        end
+    end
+
+    c:commit("parental_control")
+    apply()
 
     return {}
 end
@@ -97,14 +181,27 @@ end
     @method-desc: 添加规则集。
 
     @in string  name   规则集的名字，全局唯一，用于区分不同的规则集。
-    @in array   apps   规则集包含的应用的ID列表，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
-    @in array   exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
+    @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
+    @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_rule",{"name":"rule1","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
-M.add_rule = function()
+M.add_rule = function(params)
+    local c = uci.cursor()
+
+    local sid = c:add("parental_control", "rule")
+    c:set("parental_control", sid, "name", params.name)
+    if type(params.apps) == "table" and #params.apps ~= 0  then
+        c:set("parental_control", sid, "apps",params.apps)
+    end
+    if type(params.exceptions) == "table" and #params.exceptions ~= 0  then
+        c:set("parental_control", sid, "exceptions",params.exceptions)
+    end
+    c:set("parental_control", sid, "action", "POLICY_DROP")
+    c:commit("parental_control")
+    apply()
 
     return {}
 end
@@ -119,7 +216,14 @@ end
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","remove_rule",{"id":"cfga067b"}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
-M.remove_rule = function()
+M.remove_rule = function(params)
+    local c = uci.cursor()
+
+    if params.id then
+        c:delete("parental_control", params.id)
+    end
+    c:commit("parental_control")
+    apply()
 
     return {}
 end
@@ -131,19 +235,42 @@ end
 
     @in string   id 需要设置的规则ID，规则ID通过get_config获取。
     @in string  name   规则集的名字，全局唯一，用于区分不同的规则集。
-    @in array   apps   规则集包含的应用的ID列表，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
-    @in array   exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
+    @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
+    @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_rule",{"id":"cfga067b","name":"rule1","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
-M.set_rule = function()
+M.set_rule = function(params)
+    local c = uci.cursor()
+
+    local sid = params.id
+    c:set("parental_control", sid, "name", params.name)
+    if type(params.apps) == "table" and #params.apps ~= 0  then
+        c:set("parental_control", sid, "apps",params.apps)
+    end
+    if type(params.exceptions) == "table" and #params.exceptions ~= 0  then
+        c:set("parental_control", sid, "exceptions",params.exceptions)
+    else
+        c:delete("parental_control", sid, "exceptions")
+    end
+    c:commit("parental_control")
+    apply()
 
     return {}
 end
 
-
+function key_in_array(list,key)
+    if list then
+        for k, v in pairs(list) do
+          if k == key then
+           return true
+          end
+        end
+    end
+end 
+  
 --[[
     @method-type: call
     @method-name: get_config
@@ -173,15 +300,92 @@ end
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"enable":true,"drop_anonymous":false,"auto_update":false,"rules":[{"id":"cfga067b","name":"rule1","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]},{"id":"cfga067c","name":"rule2","apps":[3003,4004],"exceptions":["[tcp;;;www.google.com;;]"]}],"groups":[{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067a","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"14:00","end":"15:00","rule":"cfga067c"}]}]}}
 --]]
 M.get_config = function()
+    local c = uci.cursor()
+    local ret = {}
+    local enable = c:get("parental_control", "global", "enable") or '0'
+    local drop_anonymous = c:get("parental_control", "global", "drop_anonymous") or '0'
+    local auto_update = c:get("parental_control", "global", "auto_update") or '0'
+    local rules ={}
+    local groups ={}
+    c:foreach("parental_control", "rule", function(s)
+        local rule = {}
+        rule["id"] = s[".name"]
+        rule["name"] = s.name
+        rule["apps"] = s.apps
+        if s.exceptions then
+            rule["exceptions"] = s.exceptions
+        end
+        rules[#rules + 1] = rule
+    end)
+    c:foreach("parental_control", "group", function(s)
+        local group = {}
+        group["id"] = s[".name"]
+        group["name"] = s.name
+        group["default_rule"] = s.default_rule
+        if s.macs then
+            group["macs"] = s.macs
+        end
+        groups[#groups + 1] = group
+    end)
 
-    return {"enable":true,"drop_anonymous":false,"auto_update":false,"rules":[{"id":"cfga067b","name":"rule1","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]},{"id":"cfga067c","name":"rule2","apps":[3003,4004],"exceptions":["[tcp;;;www.google.com;;]"]}],"groups":[{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067a","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"14:00","end":"15:00","rule":"cfga067c"}]}]}
+    c:foreach("parental_control", "schedule", function(s)
+        local schedule = {}
+        schedule["group"] = s.group
+        schedule["week"] = tonumber(s.week)
+        schedule["rule"] = s.rule
+        schedule["begin"] = s.begin
+        schedule["end"] = s["end"]
+        if #groups then
+            for i=1,#groups do
+                if groups[i]["id"] == s.group then
+                    if not key_in_array(groups[i],"schedules") then
+                        groups[i]["schedules"] ={}
+                    end
+                    groups[i]["schedules"][#groups[i]["schedules"]+1] = schedule
+                    break
+                end
+            end
+        end
+    end)
+
+    ret["enable"] = enable ~= "0"
+    ret["drop_anonymous"] = drop_anonymous ~= "0"
+    ret["auto_update"] = auto_update ~= "0"
+    ret["rules"] = rules
+    ret["groups"] = groups
+
+    return ret
 end
 
 
 --[[
     @method-type: call
+    @method-name: set_config
+    @method-desc: 设置基础配置。
+    @in bool     enable  是否使能。
+    @in bool     drop_anonymous  是否禁止匿名设备访问。
+    @in bool     auto_update  是否自动更新特征库。
+    
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_config",{"enable":true,"drop_anonymous":false,"auto_update":false}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
+--]]
+M.set_config = function(params)
+    local c = uci.cursor()
+
+    c:set("parental_control", "global", "enable", params.enable and "1" or "0")
+    c:set("parental_control", "global", "drop_anonymous", params.drop_anonymous and "1" or "0")
+    c:set("parental_control", "global", "auto_update", params.update and "1" or "0")
+    c:commit("parental_control")
+    apply()
+
+    return {}
+end
+
+--[[
+    @method-type: call
     @method-name: update
-    @method-desc: 更新特征库。
+    @method-desc: 手动更新特征库。
     
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","update"]}

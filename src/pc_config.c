@@ -11,6 +11,8 @@
 
 #define PC_DEV_NAME "parental_control"
 
+u8 pc_drop_anonymous = 0;
+
 static struct mutex pc_cdev_mutex;
 
 struct pc_config_dev {
@@ -26,7 +28,8 @@ struct pc_cdev_file {
 };
 
 enum PC_CONFIG_CMD {
-    PC_CMD_ADD_RULE = 1,
+    PC_CMD_SET_BASE = 0,
+    PC_CMD_ADD_RULE,
     PC_CMD_ADD_GROUP,
     PC_CMD_CLEAN_RULE,
     PC_CMD_CLEAN_GROUP,
@@ -50,6 +53,22 @@ static int mac_to_hex(u8 *mac, u8 *mac_hex)
     for (i = 0; i < ETH_ALEN; i++) {
         mac_hex[i] = mac_tmp[i];
     }
+    return 0;
+}
+
+static int pc_set_base_config(cJSON *data_obj)
+{
+    cJSON *cfgobj = NULL;
+    if (!data_obj) {
+        PC_ERROR("data obj is null\n");
+        return -1;
+    }
+    cfgobj = cJSON_GetObjectItem(data_obj, "drop_anonymous");
+    if (!cfgobj) {
+        PC_ERROR("cfgobj obj is null\n");
+        return -1;
+    }
+    pc_drop_anonymous = cfgobj->valueint;
     return 0;
 }
 
@@ -175,6 +194,11 @@ int pc_config_handle(char *config, unsigned int len)
     data_obj = cJSON_GetObjectItem(config_obj, "data");
 
     switch (cmd_obj->valueint) {
+        case PC_CMD_SET_BASE:
+            if (!data_obj)
+                break;
+            pc_set_base_config(data_obj);
+            break;
         case PC_CMD_ADD_RULE:
             if (!data_obj)
                 break;
@@ -294,7 +318,7 @@ int pc_register_dev(void)
     if (IS_ERR_OR_NULL(dev)) {
         goto CLASS_OUT;
     }
-    PC_INFO("register char dev....ok\n");
+    PC_INFO("register parental_control ok\n");
 
     return 0;
 
@@ -305,7 +329,7 @@ CDEV_OUT:
 REGION_OUT:
     unregister_chrdev_region(g_pc_dev.id, 1);
 
-    PC_ERROR("register char dev....fail\n");
+    PC_ERROR("register parental_control fail\n");
     return -EINVAL;
 }
 
@@ -315,5 +339,5 @@ void pc_unregister_dev(void)
     class_destroy(g_pc_dev.c);
     cdev_del(&g_pc_dev.char_dev);
     unregister_chrdev_region(g_pc_dev.id, 1);
-    PC_INFO("unregister char dev....ok\n");
+    PC_INFO("unregister parental_control ok\n");
 }

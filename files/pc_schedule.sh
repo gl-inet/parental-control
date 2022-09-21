@@ -125,6 +125,7 @@ schedule_for_each()
 
 init_parental_control()
 {
+    load_base_config
     clean_group
     clean_rule
     load_rule

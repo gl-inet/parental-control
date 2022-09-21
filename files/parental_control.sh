@@ -1,6 +1,7 @@
 . /usr/share/libubox/jshn.sh
 . /lib/functions.sh
 
+SET_BASE="0"
 ADD_RULE="1"
 ADD_GROUP="2"
 CLEAN_RULE="3"
@@ -34,6 +35,20 @@ config_apply()
     	#[ "$DEBUG" = "1" ] && echo "config json str=$1"
     	echo "$1" >/dev/parental_control
 	fi
+}
+
+load_base_config()
+{
+    local drop_anonymous
+    config_get drop_anonymous "global" "drop_anonymous" "0"
+
+    json_init
+    json_add_int "op" $SET_BASE
+    json_add_object "data"
+    json_add_int "drop_anonymous" $drop_anonymous
+    json_str=`json_dump`
+    config_apply "$json_str"
+    json_cleanup
 }
 
 load_rule()

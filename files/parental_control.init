@@ -18,7 +18,7 @@ start_service(){
 
 	ln -s /etc/parental_control/app_feature.cfg  /tmp/pc_app_feature.cfg
 	insmod parental_control
-	rm /etc/parental_control/app_feature.cfg
+	rm /tmp/pc_app_feature.cfg
 	procd_open_instance
 	procd_set_param respawn 60 5 5
 	procd_set_param stderr 1

@@ -243,11 +243,15 @@ int get_rule_by_mac(u8 mac[ETH_ALEN], pc_rule_t *rule_ret)
 
     pc_policy_read_lock();
     group = _find_group_by_mac(mac);
-    if (!group) {
+    if (!group) {//如果设备不属于任何分组则划分为匿名设备
+        if (pc_drop_anonymous) {
+            rule_ret->action = PC_DROP;
+            ret = 0;
+        }
         goto EXIT;
     }
     rule = group->rule;
-    if (!rule) {
+    if (!rule) {//TODO 无规则配置的怎么处理？
         goto EXIT;
     }
     *rule_ret = *rule;
@@ -309,6 +313,17 @@ static int group_proc_open(struct inode *inode, struct file *file)
     return single_open(file, group_proc_show, NULL);
 }
 
+static int drop_anonymous_show(struct seq_file *s, void *v)
+{
+    seq_printf(s, pc_drop_anonymous ? "YES\n" : "NO\n");
+    return 0;
+}
+
+static int drop_anonymous_proc_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, drop_anonymous_show, NULL);
+}
+
 static int app_proc_open(struct inode *inode, struct file *file)
 {
     return single_open(file, app_proc_show, NULL);
@@ -336,6 +351,13 @@ static const struct file_operations pc_group_fops = {
     .llseek = seq_lseek,
     .release = seq_release_private,
 };
+static const struct file_operations pc_drop_anonymous_fops = {
+    .owner = THIS_MODULE,
+    .open = drop_anonymous_proc_open,
+    .read = seq_read,
+    .llseek = seq_lseek,
+    .release = seq_release_private,
+};
 #else
 static const struct proc_ops pc_app_fops = {
     .proc_flags = PROC_ENTRY_PERMANENT,
@@ -358,6 +380,13 @@ static const struct proc_ops pc_group_fops = {
     .proc_lseek = seq_lseek,
     .proc_release = seq_release_private,
 };
+static const struct proc_ops pc_drop_anonymous_fops = {
+    .proc_flags = PROC_ENTRY_PERMANENT,
+    .proc_read = seq_read,
+    .proc_open = drop_anonymous_proc_open,
+    .proc_lseek = seq_lseek,
+    .proc_release = seq_release_private,
+};
 #endif
 
 
@@ -367,12 +396,13 @@ int init_rule_procfs(void)
     struct proc_dir_entry *proc;
     proc = proc_mkdir("parental-control", NULL);
     if (!proc) {
-        pr_err("can't create dir /proc/parental-control/\n");
+        PC_ERROR("can't create dir /proc/parental-control/\n");
         return -ENODEV;;
     }
     proc_create("rule", 0644, proc, &pc_rule_fops);
     proc_create("group", 0644, proc, &pc_group_fops);
     proc_create("app", 0644, proc, &pc_app_fops);
+    proc_create("drop_anonymous", 0644, proc, &pc_drop_anonymous_fops);
     return 0;
 }
 
@@ -390,6 +420,7 @@ static int __init pc_policy_init(void)
     if (pc_filter_init())
         goto free_dev;
     init_rule_procfs();
+    PC_INFO("parental_control: (C) 2022 chongjun luo <luochognjun@gl-inet.com>\n");
     return 0;
 
 free_dev:

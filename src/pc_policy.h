@@ -23,6 +23,7 @@
 #define RULE_ID_SIZE 32
 #define GROUP_ID_SIZE 32
 #define MAX_PORT_RANGE_NUM 5
+#define MAX_APP_IN_CLASS 1000
 
 #define PC_TRUE 1
 #define PC_FALSE 0
@@ -42,6 +43,7 @@
 #define HTTPS_LEN_OFFSET		7
 
 
+extern u8 pc_drop_anonymous;
 extern struct list_head pc_app_head;
 extern rwlock_t pc_app_lock;
 extern rwlock_t pc_policy_lock;
@@ -159,7 +161,7 @@ typedef struct pc_group {
     pc_rule_t *rule;
 } pc_group_t;
 
-#define PC_LOG_LEVEL 2
+#define PC_LOG_LEVEL 3
 
 #define LOG(level, fmt, ...) do { \
     if ((level) <= PC_LOG_LEVEL) { \

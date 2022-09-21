@@ -339,10 +339,15 @@ int pc_match_one(flow_info_t *flow, pc_app_t *node)
 static int app_in_rule(u_int32_t app, pc_rule_t *rule)
 {
     int i;
-    if (!app) {
+    if (app < MAX_APP_IN_CLASS) {
         return PC_FALSE;
     }
 
+    for (i = 0; i < MAX_APP_IN_RULE && rule->apps[i]; i++) {
+        if (app == rule->apps[i])
+            return PC_TRUE;
+    }
+    app = app / MAX_APP_IN_CLASS; //如果单个应用不匹配，进一步检查是否匹配应用类型
     for (i = 0; i < MAX_APP_IN_RULE && rule->apps[i]; i++) {
         if (app == rule->apps[i])
             return PC_TRUE;

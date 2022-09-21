@@ -9,7 +9,7 @@ TIME_CUR=0
 
 debug_print()
 {
-    #[ "$DEBUG" = "1" ] || return 0
+    [ "$DEBUG" = "1" ] || return 0
     logger -t 'parental_control' $@
 }
 

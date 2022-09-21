@@ -11,9 +11,14 @@ stop_service(){
 }
 
 start_service(){
+	local enable=`uci -q get parental_control.global.enable`
+	if [ "$enable" != "1" ];then
+			return 0
+	fi
+
 	ln -s /etc/parental_control/app_feature.cfg  /tmp/pc_app_feature.cfg
 	insmod parental_control
-    rm /etc/parental_control/app_feature.cfg
+	rm /etc/parental_control/app_feature.cfg
 	procd_open_instance
 	procd_set_param respawn 60 5 5
 	procd_set_param stderr 1

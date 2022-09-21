@@ -9,8 +9,6 @@ PKG_RELEASE:=1
 
 include $(INCLUDE_DIR)/package.mk
 
-PKG_AUTOLOAD:=parental_control
-
 define KernelPackage/$(PKG_NAME)
   SECTION:=base
   CATEGORY:=gl-sdk4
@@ -18,7 +16,6 @@ define KernelPackage/$(PKG_NAME)
   TITLE:=glinet parental control
   FILES:=$(PKG_BUILD_DIR)/parental_control.ko 
   DEPENDS:=+kmod-ipt-conntrack
-  AUTOLOAD:=$(call AutoLoad,0,$(PKG_AUTOLOAD))
 endef
 
 KERNEL_MAKE_FLAGS?= \

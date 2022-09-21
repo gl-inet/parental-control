@@ -9,7 +9,7 @@
 #define MAX_DPI_PKT_NUM 64
 #define MIN_HTTP_DATA_LEN 16
 #define MAX_APP_NAME_LEN 64
-#define MAX_FEATURE_NUM_PER_APP 16 
+#define MAX_FEATURE_NUM_PER_APP 16
 #define MIN_FEATURE_STR_LEN 16
 #define MAX_FEATURE_STR_LEN 128
 #define MAX_HOST_URL_LEN 128
@@ -56,92 +56,90 @@ extern rwlock_t pc_policy_lock;
 #define pc_policy_write_lock() write_lock_bh(&pc_policy_lock);
 #define pc_policy_write_unlock() write_unlock_bh(&pc_policy_lock);
 
-enum e_http_method{
-	HTTP_METHOD_GET = 1,
-	HTTP_METHOD_POST,
+enum e_http_method {
+    HTTP_METHOD_GET = 1,
+    HTTP_METHOD_POST,
 };
-typedef struct http_proto{
-	int match;
-	int method;
-	char *url_pos;
-	int url_len;
-	char *host_pos;
-	int host_len;
-	char *data_pos;
-	int data_len;
-}http_proto_t;
+typedef struct http_proto {
+    int match;
+    int method;
+    char *url_pos;
+    int url_len;
+    char *host_pos;
+    int host_len;
+    char *data_pos;
+    int data_len;
+} http_proto_t;
 
-typedef struct https_proto{
-	int match;
-	char *url_pos;
-	int url_len;
-}https_proto_t;
+typedef struct https_proto {
+    int match;
+    char *url_pos;
+    int url_len;
+} https_proto_t;
 
-typedef struct flow_info{
-	struct nf_conn *ct;
-	u8 smac[ETH_ALEN];
-	u_int32_t src; 
-	u_int32_t dst;
-	int l4_protocol;
-	u_int16_t sport;
-	u_int16_t dport;
-	unsigned char *l4_data;
-	int l4_len;
-	http_proto_t http;
-	https_proto_t https;
-	u_int32_t app_id;
-	u_int8_t app_name[MAX_APP_NAME_LEN];
-	u_int8_t drop;
-	u_int8_t dir;
-	u_int16_t total_len;
-}flow_info_t;
+typedef struct flow_info {
+    struct nf_conn *ct;
+    u8 smac[ETH_ALEN];
+    u_int32_t src;
+    u_int32_t dst;
+    int l4_protocol;
+    u_int16_t sport;
+    u_int16_t dport;
+    unsigned char *l4_data;
+    int l4_len;
+    http_proto_t http;
+    https_proto_t https;
+    u_int32_t app_id;
+    u_int8_t app_name[MAX_APP_NAME_LEN];
+    u_int8_t drop;
+    u_int8_t dir;
+    u_int16_t total_len;
+} flow_info_t;
 
-enum PC_FEATURE_PARAM_INDEX{
-	PC_PROTO_PARAM_INDEX,
-	PC_SRC_PORT_PARAM_INDEX,
-	PC_DST_PORT_PARAM_INDEX,
-	PC_HOST_URL_PARAM_INDEX,
-	PC_REQUEST_URL_PARAM_INDEX,
-	PC_DICT_PARAM_INDEX,
+enum PC_FEATURE_PARAM_INDEX {
+    PC_PROTO_PARAM_INDEX,
+    PC_SRC_PORT_PARAM_INDEX,
+    PC_DST_PORT_PARAM_INDEX,
+    PC_HOST_URL_PARAM_INDEX,
+    PC_REQUEST_URL_PARAM_INDEX,
+    PC_DICT_PARAM_INDEX,
 };
 
-typedef struct pc_pos_info{
-	int pos;
-	unsigned char value;
-}pc_pos_info_t;
+typedef struct pc_pos_info {
+    int pos;
+    unsigned char value;
+} pc_pos_info_t;
 
-typedef struct range_value
-{
-	int not ;
-	int start;
-	int end;
+typedef struct range_value {
+    int not ;
+    int start;
+    int end;
 } range_value_t;
 
-typedef struct port_info
-{
-	u_int8_t mode; // 0: match, 1: not match
-	int num;
-	range_value_t range_list[MAX_PORT_RANGE_NUM];
+typedef struct port_info {
+    u_int8_t mode; // 0: match, 1: not match
+    int num;
+    range_value_t range_list[MAX_PORT_RANGE_NUM];
 } port_info_t;
 
-typedef struct pc_app{
-	struct list_head  		head;
-	u_int32_t app_id;
-	char app_name[MAX_APP_NAME_LEN];
-	char feature_str[MAX_FEATURE_NUM_PER_APP][MAX_FEATURE_STR_LEN];
-	u_int32_t proto;
-	u_int32_t sport;
-	u_int32_t dport;
-	port_info_t dport_info;
-	char host_url[MAX_HOST_URL_LEN];
-	char request_url[MAX_REQUEST_URL_LEN];
-	int pos_num;
-	pc_pos_info_t pos_info[MAX_POS_INFO_PER_FEATURE];
-}pc_app_t;
+typedef struct pc_app {
+    struct list_head  		head;
+    u_int32_t app_id;
+    char app_name[MAX_APP_NAME_LEN];
+    char feature_str[MAX_FEATURE_NUM_PER_APP][MAX_FEATURE_STR_LEN];
+    u_int32_t proto;
+    u_int32_t sport;
+    u_int32_t dport;
+    port_info_t dport_info;
+    char host_url[MAX_HOST_URL_LEN];
+    char request_url[MAX_REQUEST_URL_LEN];
+    int pos_num;
+    pc_pos_info_t pos_info[MAX_POS_INFO_PER_FEATURE];
+} pc_app_t;
 
 enum pc_action {
-	PC_DROP = 0,
-	PC_ACCEPT,
+    PC_DROP = 0,
+    PC_ACCEPT,
     PC_POLICY_DROP,
     PC_POLICY_ACCEPT,
 };
@@ -152,7 +150,7 @@ typedef struct pc_rule {
     u_int32_t apps[MAX_APP_IN_RULE];
     unsigned int refer_count;
     enum pc_action action;
-}pc_rule_t;
+} pc_rule_t;
 
 typedef struct pc_group {
     struct list_head head;
@@ -161,7 +159,7 @@ typedef struct pc_group {
     pc_rule_t *rule;
 } pc_group_t;
 
-#define PC_LOG_LEVEL 4
+#define PC_LOG_LEVEL 2
 
 #define LOG(level, fmt, ...) do { \
     if ((level) <= PC_LOG_LEVEL) { \
@@ -190,12 +188,12 @@ extern int add_pc_rule(const char *id,  unsigned int apps[MAX_APP_IN_RULE], enum
 extern int set_pc_rule(const char *id, unsigned int apps[MAX_APP_IN_RULE], enum pc_action action);
 extern int clean_pc_rule(void);
 
-extern int add_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN],const char *rule_id);
+extern int add_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const char *rule_id);
 extern int set_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const char *rule_id);
 extern int clean_pc_group(void);
-extern pc_group_t * find_group_by_mac(u8 mac[ETH_ALEN]);
+extern pc_group_t *find_group_by_mac(u8 mac[ETH_ALEN]);
 extern enum pc_action get_action_by_mac(u8 mac[ETH_ALEN]);
-extern int get_rule_by_mac(u8 mac[ETH_ALEN],pc_rule_t *rule_ret);
+extern int get_rule_by_mac(u8 mac[ETH_ALEN], pc_rule_t *rule_ret);
 
 
 extern int pc_register_dev(void);

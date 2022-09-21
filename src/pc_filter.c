@@ -56,13 +56,16 @@ int dpi_https_proto(flow_info_t *flow)
 {
     int i;
     short url_len = 0;
-    char *p = flow->l4_data;
-    int data_len = flow->l4_len;
+    char *p;
+    int data_len;
 
     if (NULL == flow) {
         PC_ERROR("flow is NULL\n");
         return -1;
     }
+    p = flow->l4_data;
+    data_len = flow->l4_len;
+
     if (NULL == p || data_len == 0) {
         return -1;
     }

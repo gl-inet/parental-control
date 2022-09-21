@@ -355,12 +355,27 @@ static int app_in_rule(u_int32_t app, pc_rule_t *rule)
     return PC_FALSE;
 }
 
+static int match_except_app(flow_info_t *flow, pc_rule_t *rule)
+{
+    int i;
+    for (i = 0; i < MAX_EXCEPTION_APP_IN_RULE; i++) {
+        if (rule->except_apps[i].app_id != EXCEPT_APP_ID)
+            break;
+        if (pc_match_one(flow, &rule->except_apps[i])) {
+            PC_LMT_DEBUG("rule %s match exception app %s from mac %pM\n", rule->id, rule->except_apps[i].app_name, flow->smac);
+            return PC_TRUE;
+        }
+    }
+    return PC_FALSE;
+}
+
 int app_filter_match(flow_info_t *flow, pc_rule_t *rule)
 {
     pc_app_t *n, *node;
     pc_app_read_lock();
     if (!list_empty(&pc_app_head)) {
         list_for_each_entry_safe(node, n, &pc_app_head, head) {
+            int except = PC_FALSE;
             if (!app_in_rule(node->app_id, rule)) {
                 continue;
             }
@@ -370,9 +385,13 @@ int app_filter_match(flow_info_t *flow, pc_rule_t *rule)
                 } else {
                     flow->drop = PC_FALSE;
                 }
+                except = match_except_app(flow, rule);
+                if (except) { //例外规则匹配
+                    flow->drop = !flow->drop;
+                }
                 strcpy(flow->app_name, node->app_name);
                 flow->app_id = node->app_id;
-                PC_LMT_DEBUG("match app %d from mac %pM policy is %s\n", node->app_id, flow->smac, flow->drop ? "DROP" : "ACCEPT");
+                PC_LMT_DEBUG("match app %d from mac %pM%s, policy is %s\n", node->app_id, flow->smac, except ? ", but in exception list" : "", flow->drop ? "DROP" : "ACCEPT");
                 goto EXIT;
             }
         }
@@ -405,43 +424,59 @@ void pc_get_smac(struct sk_buff *skb,  u8 smac[ETH_ALEN])
 u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
 {
     unsigned long long total_packets = 0;
+    u_int32_t ret;
     flow_info_t flow;
-    pc_rule_t rule;
+    pc_rule_t *rule;
     enum ip_conntrack_info ctinfo;
     struct nf_conn *ct = NULL;
     struct nf_conn_acct *acct;
     int app_id = 0;
     int drop = 0;
 
-    memset((char *)&flow, 0x0, sizeof(flow_info_t));
-    pc_get_smac(skb,  flow.smac);
-    if (is_zero_ether_addr(flow.smac) || is_broadcast_ether_addr(flow.smac)) {
+    rule = kzalloc(sizeof(pc_rule_t), GFP_KERNEL);
+    if (rule == NULL) {
+        PC_ERROR("malloc rule memory error\n");
         return NF_ACCEPT;
     }
 
-    if (get_rule_by_mac(flow.smac, &rule)) {
-        return NF_ACCEPT;
+    memset((char *)&flow, 0x0, sizeof(flow_info_t));
+    pc_get_smac(skb,  flow.smac);
+    if (is_zero_ether_addr(flow.smac) || is_broadcast_ether_addr(flow.smac)) {
+        ret = NF_ACCEPT;
+        goto EXIT;
     }
-    switch (rule.action) {
+
+    if (get_rule_by_mac(flow.smac, rule)) {
+        ret = NF_ACCEPT;
+        goto EXIT;
+    }
+    switch (rule->action) {
         case PC_DROP:
             PC_LMT_DEBUG("from mac %pM action is DROP\n", flow.smac);
-            return NF_DROP;
+            ret = NF_DROP;
+            goto EXIT;
         case PC_ACCEPT:
             PC_LMT_DEBUG("from mac %pM action is ACCEPT\n", flow.smac);
-            return NF_ACCEPT;
+            ret = NF_ACCEPT;
+            goto EXIT;
         case PC_POLICY_DROP:
         case PC_POLICY_ACCEPT:
             break;
         default:
-            return NF_ACCEPT;
+            ret = NF_ACCEPT;
+            goto EXIT;
     }
 
-    if (parse_flow_proto(skb, &flow) < 0)
-        return NF_ACCEPT;
+    if (parse_flow_proto(skb, &flow) < 0) {
+        ret = NF_ACCEPT;
+        goto EXIT;
+    }
 
     ct = nf_ct_get(skb, &ctinfo);
-    if (ct == NULL || !nf_ct_is_confirmed(ct))
-        return NF_ACCEPT;
+    if (ct == NULL || !nf_ct_is_confirmed(ct)) {
+        ret = NF_ACCEPT;
+        goto EXIT;
+    }
 
     if (ct->mark != 0) {
         app_id = ct->mark & (~NF_DROP_BIT);
@@ -450,23 +485,30 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
                 drop = 1;
 
             if (drop) {
-                return NF_DROP;
+                ret = NF_DROP;
+                goto EXIT;
             }
         }
     }
     acct = nf_conn_acct_find(ct);
-    if (!acct)
-        return NF_ACCEPT;
+    if (!acct) {
+        ret = NF_ACCEPT;
+        goto EXIT;
+    }
     total_packets = (unsigned long long)atomic64_read(&acct->counter[IP_CT_DIR_ORIGINAL].packets)
                     + (unsigned long long)atomic64_read(&acct->counter[IP_CT_DIR_REPLY].packets);
 
-    if (total_packets > MAX_DPI_PKT_NUM)
-        return NF_ACCEPT;
+    if (total_packets > MAX_DPI_PKT_NUM) {
+        ret = NF_ACCEPT;
+        goto EXIT;
+    }
 
-    if (0 != dpi_main(skb, &flow))
-        return NF_ACCEPT;
+    if (0 != dpi_main(skb, &flow)) {
+        ret = NF_ACCEPT;
+        goto EXIT;
+    }
 
-    app_filter_match(&flow, &rule);
+    app_filter_match(&flow, rule);
 
     if (flow.app_id != 0) {
         PC_LMT_INFO("match %s %pI4(%d)--> %pI4(%d) len = %d, %d\n ", IPPROTO_TCP == flow.l4_protocol ? "tcp" : "udp",
@@ -475,9 +517,13 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     if (flow.drop) {
         ct->mark |= NF_DROP_BIT;
         PC_LMT_INFO("##Drop app %s flow, appid is %d\n", flow.app_name, flow.app_id);
-        return NF_DROP;
+        ret =  NF_DROP;
+        goto EXIT;
     }
-    return NF_ACCEPT;
+    ret = NF_ACCEPT;
+EXIT:
+    kfree(rule);
+    return ret;
 }
 
 

@@ -60,9 +60,10 @@ load_rule()
 
     load_rule_cb(){
         local config=$1
-        local action apps action_str
+        local action apps action_str exceptions
         config_get action_str "$config" "action"
         config_get apps "$config" "apps"
+        config_get exceptions "$config" "exceptions"
         action="$(str_action_num $action_str)"
         json_add_object ""
         json_add_string "id" "$config"  
@@ -71,6 +72,13 @@ load_rule()
             json_add_array "apps"
             for app in $apps;do
                 json_add_int "" $app
+            done
+            json_select ..
+        }
+        [ -n "$exceptions" ] && {
+            json_add_array "exceptions"
+            for except in $exceptions;do
+                json_add_string "" $except
             done
             json_select ..
         }

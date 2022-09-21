@@ -72,6 +72,7 @@ static int pc_set_base_config(cJSON *data_obj)
     return 0;
 }
 
+
 static int pc_set_rule_config(cJSON *data_obj, char add)
 {
     int i, j;
@@ -87,7 +88,9 @@ static int pc_set_rule_config(cJSON *data_obj, char add)
     }
     for (i = 0; i < cJSON_GetArraySize(arr); i++) {
         cJSON *rule_obj = NULL, *id_obj = NULL, *action_obj = NULL, *apps_obj = NULL, *app_obj = NULL;
+        cJSON *excepts_obj = NULL, *except_obj = NULL;
         unsigned int apps[MAX_APP_IN_RULE] = {0};
+        const char *except_str[MAX_EXCEPTION_APP_IN_RULE] = {NULL};
         rule_obj = cJSON_GetArrayItem(arr, i);
         if (!rule_obj) {
             PC_ERROR("no rule fund\n");
@@ -111,10 +114,19 @@ static int pc_set_rule_config(cJSON *data_obj, char add)
                     apps[j] = (unsigned int)(app_obj->valueint);
             }
         }
+        excepts_obj = cJSON_GetObjectItem(rule_obj, "exceptions");
+        if (excepts_obj) {
+            for (j = 0; j < cJSON_GetArraySize(excepts_obj) && (j < MAX_EXCEPTION_APP_IN_RULE); j++) {
+                except_obj = cJSON_GetArrayItem(excepts_obj, j);
+                if (except_obj) {
+                    except_str[j] = except_obj->valuestring;
+                }
+            }
+        }
         if (add)
-            add_pc_rule(id_obj->valuestring, apps, action_obj->valueint);
+            add_pc_rule(id_obj->valuestring, apps, action_obj->valueint, except_str);
         else
-            set_pc_rule(id_obj->valuestring, apps, action_obj->valueint);
+            set_pc_rule(id_obj->valuestring, apps, action_obj->valueint, except_str);
     }
 
     return 0;

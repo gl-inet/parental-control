@@ -12,8 +12,23 @@ struct list_head pc_group_head = LIST_HEAD_INIT(pc_group_head);
 
 DEFINE_RWLOCK(pc_policy_lock);
 
+static int rule_add_except_apps(pc_rule_t *rule, const char *except_str[MAX_EXCEPTION_APP_IN_RULE])
+{
+    int i, num;
+    char app_name[MAX_APP_NAME_LEN];
+    num = 0;
+    for (i = 0; i < MAX_EXCEPTION_APP_IN_RULE && except_str[i] && (strlen(except_str[i]) >= MIN_FEATURE_STR_LEN); i++) {
+        snprintf(app_name, MAX_APP_NAME_LEN, "%s_except_app_%d", rule->id, i);
+        if (!pc_set_app_by_str(&rule->except_apps[i], EXCEPT_APP_ID, app_name, except_str[i])) {
+            num++;
+        }
+    }
+    PC_DEBUG("Add %d except apps to the rule %s\n", num, rule->id);
+    return num;
+}
 
-int add_pc_rule(const char *id,  unsigned int apps[MAX_APP_IN_RULE], enum pc_action action)
+int add_pc_rule(const char *id,  unsigned int apps[MAX_APP_IN_RULE], enum pc_action action,
+                const char *except_str[MAX_EXCEPTION_APP_IN_RULE])
 {
     pc_rule_t *rule = NULL;
     rule = kzalloc(sizeof(pc_rule_t), GFP_KERNEL);
@@ -25,6 +40,7 @@ int add_pc_rule(const char *id,  unsigned int apps[MAX_APP_IN_RULE], enum pc_act
         memcpy(rule->apps, apps, MAX_APP_IN_RULE);
         rule->action = action;
         rule->refer_count = 0;
+        rule_add_except_apps(rule, except_str);
         pc_policy_write_lock();
         list_add(&rule->head, &pc_rule_head);
         pc_policy_write_unlock();
@@ -65,7 +81,8 @@ int clean_pc_rule(void)
     return 0;
 }
 
-int set_pc_rule(const char *id, unsigned int apps[MAX_APP_IN_RULE], enum pc_action action)
+int set_pc_rule(const char *id, unsigned int apps[MAX_APP_IN_RULE], enum pc_action action,
+                const char *except_str[MAX_EXCEPTION_APP_IN_RULE])
 {
     pc_rule_t *rule = NULL, *n;
     if (!list_empty(&pc_rule_head)) {
@@ -261,6 +278,40 @@ EXIT:
     return ret;
 }
 
+static int except_app_print(struct seq_file *s, pc_rule_t *rule)
+{
+    range_value_t port_range;
+    pc_app_t *app = NULL;
+    int i, j;
+    seq_printf(s, "EXCEPTION APPS:\n");
+    seq_printf(s, "ID\tName\tProto\tSport\tDport\tHost_url\tRequest_url\tDataDictionary\n");
+    for (j = 0; j < MAX_EXCEPTION_APP_IN_RULE; j++) {
+        if (rule->except_apps[j].app_id != EXCEPT_APP_ID) {
+            //seq_printf(s, "\n");
+            break;
+        }
+        app = &rule->except_apps[j];
+        seq_printf(s, "%d\t%s\t%d\t%d\t", app->app_id, app->app_name, app->proto, app->sport);
+        for (i = 0; i < app->dport_info.num; i++) {
+            port_range = app->dport_info.range_list[i];
+            (i == 0) ? seq_printf(s, "%s", port_range.not ? "!" : "") :
+            seq_printf(s, "%s", port_range.not ? "|!" : "|");
+            (port_range.start == port_range.end) ?
+            seq_printf(s, "%d", port_range.start) :
+            seq_printf(s, "%d-%d", port_range.start, port_range.end);
+        }
+        if (app->dport_info.num)
+            seq_printf(s, "\t");
+        seq_printf(s, "%s\t%s", app->host_url, app->request_url);
+
+        for (i = 0; i < app->pos_num; i++) {
+            seq_printf(s, "%s[%d]=0x%x", (i == 0) ? "\t" : "&&", app->pos_info[i].pos, app->pos_info[i].value);
+        }
+        seq_printf(s, "\n");
+    }
+    return 0;
+}
+
 static int rule_proc_show(struct seq_file *s, void *v)
 {
     pc_rule_t *rule = NULL, *n;
@@ -276,6 +327,8 @@ static int rule_proc_show(struct seq_file *s, void *v)
                 seq_printf(s, "%d ", rule->apps[i]);
             }
             seq_printf(s, "]\n");
+            except_app_print(s, rule);
+            seq_printf(s, "=======================================================\n\n");
         }
     }
     pc_policy_read_unlock();
@@ -391,7 +444,7 @@ static const struct proc_ops pc_drop_anonymous_fops = {
 
 
 
-int init_rule_procfs(void)
+int pc_init_procfs(void)
 {
     struct proc_dir_entry *proc;
     proc = proc_mkdir("parental-control", NULL);
@@ -419,7 +472,7 @@ static int __init pc_policy_init(void)
         goto free_app;
     if (pc_filter_init())
         goto free_dev;
-    init_rule_procfs();
+    pc_init_procfs();
     PC_INFO("parental_control: (C) 2022 chongjun luo <luochognjun@gl-inet.com>\n");
     return 0;
 

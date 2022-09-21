@@ -9,55 +9,61 @@ struct list_head pc_app_head = LIST_HEAD_INIT(pc_app_head);
 
 DEFINE_RWLOCK(pc_app_lock);
 
-static int __add_app_feature(int appid, char *name, int proto, int src_port,
-                             port_info_t dport_info, char *host_url, char *request_url, char *dict)
+static void __set_app_feature(pc_app_t *node, int appid, const char *name, int proto, int src_port,
+                              port_info_t dport_info, char *host_url, char *request_url, char *dict)
 {
-    pc_app_t *node = NULL;
     char *p = dict;
     char *begin = dict;
     char pos[32] = {0};
     int index = 0;
     int value = 0;
+    node->app_id = appid;
+    strcpy(node->app_name, name);
+    node->proto = proto;
+    node->dport_info = dport_info;
+    node->sport = src_port;
+    strcpy(node->host_url, host_url);
+    strcpy(node->request_url, request_url);
+    // 00:0a-01:11
+    p = dict;
+    begin = dict;
+    index = 0;
+    value = 0;
+    while (*p++) {
+        if (*p == '|') {
+            memset(pos, 0x0, sizeof(pos));
+            strncpy(pos, begin, p - begin);
+            begin = p + 1;
+            if (k_sscanf(pos, "%d:%x", &index, &value) == 2) {
+                node->pos_info[node->pos_num].pos = index;
+                node->pos_info[node->pos_num].value = value;
+                node->pos_num++;
+            }
+        }
+    }
+
+    if (begin != dict)
+        strncpy(pos, begin, p - begin);
+    else
+        strcpy(pos, dict);
+
+    if (k_sscanf(pos, "%d:%x", &index, &value) == 2) {
+        node->pos_info[node->pos_num].pos = index;
+        node->pos_info[node->pos_num].value = value;
+        node->pos_num++;
+    }
+}
+
+static int __add_app_feature(int appid, const char *name, int proto, int src_port,
+                             port_info_t dport_info, char *host_url, char *request_url, char *dict)
+{
+    pc_app_t *node = NULL;
     node = kzalloc(sizeof(pc_app_t), GFP_KERNEL);
     if (node == NULL) {
         printk("malloc feature memory error\n");
         return -1;
     } else {
-        node->app_id = appid;
-        strcpy(node->app_name, name);
-        node->proto = proto;
-        node->dport_info = dport_info;
-        node->sport = src_port;
-        strcpy(node->host_url, host_url);
-        strcpy(node->request_url, request_url);
-        // 00:0a-01:11
-        p = dict;
-        begin = dict;
-        index = 0;
-        value = 0;
-        while (*p++) {
-            if (*p == '|') {
-                memset(pos, 0x0, sizeof(pos));
-                strncpy(pos, begin, p - begin);
-                begin = p + 1;
-                if (k_sscanf(pos, "%d:%x", &index, &value) == 2) {
-                    node->pos_info[node->pos_num].pos = index;
-                    node->pos_info[node->pos_num].value = value;
-                    node->pos_num++;
-                }
-            }
-        }
-
-        if (begin != dict)
-            strncpy(pos, begin, p - begin);
-        else
-            strcpy(pos, dict);
-
-        if (k_sscanf(pos, "%d:%x", &index, &value) == 2) {
-            node->pos_info[node->pos_num].pos = index;
-            node->pos_info[node->pos_num].value = value;
-            node->pos_num++;
-        }
+        __set_app_feature(node, appid, name, proto, src_port, dport_info, host_url, request_url, dict);
         pc_app_write_lock();
         list_add(&(node->head), &pc_app_head);
         pc_app_write_unlock();
@@ -144,7 +150,7 @@ static int parse_port_info(char *port_str, port_info_t *info)
 }
 
 //[tcp;;443;baidu.com;;]
-static int add_app_feature(int appid, char *name, char *feature)
+static int parse_app_str(pc_app_t *app, int appid, const char *name, const char *feature)
 {
     char proto_str[16] = {0};
     char src_port_str[16] = {0};
@@ -154,8 +160,8 @@ static int add_app_feature(int appid, char *name, char *feature)
     char request_url[128] = {0};
     char dict[128] = {0};
     int proto = IPPROTO_TCP;
-    char *p = feature;
-    char *begin = feature;
+    const char *p = feature;
+    const char *begin = feature;
     int param_num = 0;
     //int dst_port = 0;
     int src_port = 0;
@@ -210,9 +216,21 @@ static int add_app_feature(int appid, char *name, char *feature)
     sscanf(src_port_str, "%d", &src_port);
     //	sscanf(dst_port_str, "%d", &dst_port);
     parse_port_info(dst_port_str, &dport_info);
-
-    __add_app_feature(appid, name, proto, src_port, dport_info, host_url, request_url, dict);
+    if (app)
+        __set_app_feature(app, appid, name, proto, src_port, dport_info, host_url, request_url, dict);
+    else
+        __add_app_feature(appid, name, proto, src_port, dport_info, host_url, request_url, dict);
     return 0;
+}
+
+static int pc_add_app(int appid, const char *name, const char *feature)
+{
+    return parse_app_str(NULL, appid, name, feature);
+}
+
+int pc_set_app_by_str(pc_app_t *app, int appid, const char *name, const char *feature)
+{
+    return parse_app_str(app, appid, name, feature);
 }
 
 static void pc_init_feature(char *feature_str)
@@ -251,14 +269,14 @@ static void pc_init_feature(char *feature_str)
             memset(feature, 0x0, sizeof(feature));
             strncpy((char *)feature, begin, p - begin);
 
-            add_app_feature(app_id, app_name, feature);
+            pc_add_app(app_id, app_name, feature);
             begin = p + 1;
         }
     }
     if (p != begin) {
         memset(feature, 0x0, sizeof(feature));
         strncpy((char *)feature, begin, p - begin);
-        add_app_feature(app_id, app_name, feature);
+        pc_add_app(app_id, app_name, feature);
     }
 }
 

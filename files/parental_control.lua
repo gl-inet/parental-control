@@ -236,7 +236,7 @@ end
     @in string   id 需要设置的规则ID，规则ID通过get_config获取。
     @in string  name   规则集的名字，全局唯一，用于区分不同的规则集。
     @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
-    @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
+    @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，一个规则集中最多添加32个例外特征, 遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_rule",{"id":"cfga067b","name":"rule1","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]}]}

@@ -58,13 +58,13 @@ end
     @in string   default_rule 分组使用的默认规则集ID，规则集ID需对应rules参数中返回的规则集ID。
     @in array    macs 分组包含的设备MAC地址列表，为字符串类型。
     @in array   ?schedules 分组包含的日程列表，如果对应分组存在日程设置则传入该参数。
-    @in number   ?schedules.week 日程在每周的第几天，允许范围为1-7，依次对应周一到周末。
+    @in array   ?schedules.week 日程在每周的第几天，允许范围为1-7，依次对应周一到周末。
     @in string   ?schedules.begin 日程的开始时间，格式为hh:mm，起始时间必须在结束时间之前。
     @in string   ?schedules.end 日程的结束时间，格式为hh:mm，结束时间必须在起始时间之后。
     @in string   ?schedules.rule 该日程需要使用的规则集ID，规则集ID需对应rules参数中传入的规则集ID。
 
 
-    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_group",{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_group",{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":[1,3,5],"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.add_group = function(params)
@@ -80,7 +80,7 @@ M.add_group = function(params)
         for i = 1, #params.schedules do
             local sche = c:add("parental_control", "schedule")
             c:set("parental_control", sche, "group",sid)
-            c:set("parental_control", sche, "week",tostring(params.schedules[i].week))
+            c:set("parental_control", sche, "week",params.schedules[i].week)
             c:set("parental_control", sche, "begin",params.schedules[i].begin)
             c:set("parental_control", sche, "end",params.schedules[i]["end"])
             c:set("parental_control", sche, "rule",params.schedules[i].rule)
@@ -162,7 +162,7 @@ M.set_group = function(params)
         for i = 1, #params.schedules do
             local sche = c:add("parental_control", "schedule")
             c:set("parental_control", sche, "group",sid)
-            c:set("parental_control", sche, "week",tostring(params.schedules.week))
+            c:set("parental_control", sche, "week",params.schedules.week)
             c:set("parental_control", sche, "begin",params.schedules.begin)
             c:set("parental_control", sche, "end",params.schedules["end"])
             c:set("parental_control", sche, "rule",params.schedules.rule)

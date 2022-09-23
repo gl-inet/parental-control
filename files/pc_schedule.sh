@@ -24,7 +24,11 @@ get_current_time()
 time_in_range()
 {
     local week=$1
-    [ "$WEEK_CUR" -ne "$week" ] && return 1
+    local week_match=0
+    for w in $week; do
+        [ "$WEEK_CUR" -eq "$w" ] && { week_match=1;break; }
+    done
+    [ "$week_match" -ne "1" ] && return 1
     local begin="$(echo $2|awk -F: '{printf $1$2$3}')"
     local end="$(echo $3|awk -F: '{printf $1$2$3}')"
     [ "$TIME_CUR" -ge "$begin" ] && [ "$TIME_CUR" -le "$end" ] && return 0
@@ -111,7 +115,7 @@ schedule_for_each()
         config_get end "$config" "end"
         config_get group "$config" "group"
         
-        time_in_range $week $begin $end && {
+        time_in_range "$week" "$begin" "$end" && {
             config_get group "$config" "group"
             config_get rule "$config" "rule"
             eval ${group}_rule=\$rule

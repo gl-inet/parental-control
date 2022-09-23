@@ -2,7 +2,7 @@
 
 ## 代码框架
 
-![framework](.\img\framework.svg)
+![framework](./img/framework.svg)
 
 应用层主要提供配置，对外提供API并且实现不同时间的策略切换
 
@@ -16,13 +16,13 @@ proc文件节点主要提供一些状态，便于调试和获取状态
 
 group ,rule, app在/dev/parental_control中的引用关系如下
 
-![relationship ](.\img\relationship .svg)
+![relationship ](./img/relationship .svg)
 
 ### 过滤器过滤流程
 
 过滤器的设计尽量保证所有数据高效通过，尽可能减少数据分析对网络性能的消耗
 
-![filter-flow](.\img\filter-flow.svg)
+![filter-flow](./img/filter-flow.svg)
 
 
 

@@ -32,17 +32,19 @@ M.get_app_list = function()
     local ret = {}
     local apps = {}
 
-    for line in io.lines("/proc/parental-control/app") do
+    for line in io.lines("/etc/parental_control/app_feature.cfg") do
         local fields = {}
         local app = {}
-        for field in line:gmatch("[^\t]+") do
+        for field in line:gmatch("[^%s:]+") do
             fields[#fields + 1] = field
         end
-        if fields[1] ~= "ID" then 
-            app["id"] = fields[1]
-            app["name"] = fields[2]
-            app["type"] = math.floor(tonumber(fields[1])/1000)
-            apps[#apps + 1] = app
+        if #fields > 0  then
+            if string.sub(fields[1],1,1) ~= "#" then
+                app["id"] = tonumber(fields[1])
+                app["name"] = fields[2]
+                app["type"] = math.floor(tonumber(fields[1])/1000)
+                apps[#apps + 1] = app
+            end
         end
     end
     ret["apps"] = apps
@@ -58,16 +60,25 @@ end
     @in string   default_rule 分组使用的默认规则集ID，规则集ID需对应rules参数中返回的规则集ID。
     @in array    macs 分组包含的设备MAC地址列表，为字符串类型。
     @in array   ?schedules 分组包含的日程列表，如果对应分组存在日程设置则传入该参数。
-    @in array   ?schedules.week 日程在每周的第几天，允许范围为1-7，依次对应周一到周末。
+    @in number   ?schedules.week 日程在每周的第几天，允许范围为1-7，依次对应周一到周末。
     @in string   ?schedules.begin 日程的开始时间，格式为hh:mm，起始时间必须在结束时间之前。
     @in string   ?schedules.end 日程的结束时间，格式为hh:mm，结束时间必须在起始时间之后。
     @in string   ?schedules.rule 该日程需要使用的规则集ID，规则集ID需对应rules参数中传入的规则集ID。
 
+    @out number ?err_code     错误码(-1: 缺少必须参数, -2:传递了shedules但是缺少必须参数)
+    @out string ?err_msg      错误信息
 
-    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_group",{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":[1,3,5],"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_group",{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.add_group = function(params)
+    if params.name == nil or params.default_rule == nil or params.macs == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
+
     local c = uci.cursor()
 
     local sid = c:add("parental_control", "group")
@@ -78,6 +89,12 @@ M.add_group = function(params)
     end
     if type(params.schedules) == "table" and #params.schedules ~= 0  then
         for i = 1, #params.schedules do
+            if params.schedules[i].week == nil or params.schedules[i].begin == nil or params.schedules[i]["end"] == nil or params.schedules[i].rule == nil then
+                return {
+                    err_code = -2,
+                    err_msg = "schedule parameter missing"
+                }
+            end
             local sche = c:add("parental_control", "schedule")
             c:set("parental_control", sche, "group",sid)
             c:set("parental_control", sche, "week",params.schedules[i].week)
@@ -99,11 +116,19 @@ end
 
     @in string   id 需要删除的分组ID，分组ID通过get_config获取。
 
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","remove_group",{"id":"cfga01234b"}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.remove_group = function(params)
+    if params.id == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
     local c = uci.cursor()
 
     if params.id then
@@ -135,11 +160,19 @@ end
     @in string   ?schedules.end 日程的结束时间，格式为hh:mm，结束时间必须在起始时间之后。
     @in string   ?schedules.rule 该日程需要使用的规则集ID，规则集ID需对应rules参数中传入的规则集ID。
 
+    @out number ?err_code     错误码(-1: 缺少必须参数, -2:传递了shedules但是缺少必须参数)
+    @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_group",{"id":"cfga01234b","name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":[1,3,5],"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.set_group = function(params)
+    if params.id == nil or params.name == nil or params.default_rule == nil or params.macs == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
     local c = uci.cursor()
 
     local sid = params.id
@@ -160,6 +193,12 @@ M.set_group = function(params)
     -- 添加新日程
     if type(params.schedules) == "table" and #params.schedules ~= 0  then
         for i = 1, #params.schedules do
+            if params.schedules[i].week == nil or params.schedules[i].begin == nil or params.schedules[i]["end"] == nil or params.schedules[i].rule == nil then
+                return {
+                    err_code = -2,
+                    err_msg = "schedule parameter missing"
+                }
+            end
             local sche = c:add("parental_control", "schedule")
             c:set("parental_control", sche, "group",sid)
             c:set("parental_control", sche, "week",params.schedules.week)
@@ -181,15 +220,23 @@ end
     @method-desc: 添加规则集。
 
     @in string  name   规则集的名字，全局唯一，用于区分不同的规则集。
-    @in string  color   规则集的标签颜色，UI使用。
+    @in string  color   规则集的标签颜色，提供给显示UI使用。
     @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
     @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外。一个规则集中最多添加32个例外特征，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_rule",{"name":"rule1","color":"#aabbccddee","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.add_rule = function(params)
+    if params.name == nil or  params.color == nil or  params.apps == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
     local c = uci.cursor()
 
     local sid = c:add("parental_control", "rule")
@@ -215,10 +262,19 @@ end
 
     @in string   id 需要移除的规则ID，规则ID通过get_config获取。
 
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
+
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","remove_rule",{"id":"cfga067b"}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.remove_rule = function(params)
+    if params.id == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end   
     local c = uci.cursor()
 
     if params.id then
@@ -241,11 +297,19 @@ end
     @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
     @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，一个规则集中最多添加32个例外特征, 遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_rule",{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.set_rule = function(params)
+    if params.id == nil or params.name == nil or  params.color == nil or  params.apps == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
     local c = uci.cursor()
 
     local sid = params.id
@@ -371,12 +435,20 @@ end
     @in bool     enable  是否使能。
     @in bool     drop_anonymous  是否禁止匿名设备访问。
     @in bool     auto_update  是否自动更新特征库。
-    
+
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_config",{"enable":true,"drop_anonymous":false,"auto_update":false}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.set_config = function(params)
+    if params.enable == nil or params.drop_anonymous == nil or  params.update == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
     local c = uci.cursor()
 
     c:set("parental_control", "global", "enable", params.enable and "1" or "0")

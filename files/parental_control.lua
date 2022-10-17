@@ -5,8 +5,6 @@
 
 local M = {}
 
-local rpc = require "oui.rpc"
-local ubus = require "ubus"
 local uci = require "uci"
 
 local function apply()

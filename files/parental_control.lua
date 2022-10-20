@@ -218,7 +218,7 @@ M.set_group = function(params)
             else
                 c:set("parental_control", sche, "begin",params.schedules[i].begin)
             end
-            if(#params.schedules[i].["end"] < 8) then
+            if(#params.schedules[i]["end"] < 8) then
                 c:set("parental_control", sche, "end",params.schedules[i]["end"] .. ":00")
             else
                 c:set("parental_control", sche, "end",params.schedules[i]["end"])

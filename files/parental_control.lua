@@ -153,7 +153,7 @@ end
     @in string   default_rule 分组使用的默认规则集ID，规则集ID需对应rules参数中返回的规则集ID。
     @in array    macs 分组包含的设备MAC地址列表，为字符串类型。
     @in array   ?schedules 分组包含的日程列表，如果对应分组存在日程设置则传入该参数。
-    @in array   ?schedules.week 日程在每周的第几天，允许范围为1-7，依次对应周一到周末。
+    @in array   ?schedules.week 日程在每周的第几天，允许范围为0-6，依次对应周末到周六。
     @in string   ?schedules.begin 日程的开始时间，格式为hh:mm，起始时间必须在结束时间之前。
     @in string   ?schedules.end 日程的结束时间，格式为hh:mm，结束时间必须在起始时间之后。
     @in string   ?schedules.rule 该日程需要使用的规则集ID，规则集ID需对应rules参数中传入的规则集ID。
@@ -165,7 +165,7 @@ end
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.set_group = function(params)
-    if params.id == nil or params.name == nil or params.default_rule == nil or params.macs == nil then
+    if params.id == nil  then
         return {
             err_code = -1,
             err_msg = "parameter missing"
@@ -174,23 +174,36 @@ M.set_group = function(params)
     local c = uci.cursor()
 
     local sid = params.id
-    c:set("parental_control", sid, "name", params.name)
-    c:set("parental_control", sid, "default_rule", params.default_rule)
-    if type(params.macs) == "table" and #params.macs ~= 0  then
-        c:set("parental_control", sid, "macs",params.macs)
-    else
-        c:delete("parental_control", sid, "macs")
+    -- 如果传递了name参数则进行修改
+    if params.name ~= nil then
+        c:set("parental_control", sid, "name", params.name)
     end
 
-    -- 先删除旧的日程
-    c:foreach("parental_control", "schedule", function(s)
-        if s.group and s.group ==params.id then 
-            c:delete("parental_control", s[".name"])
-        end
-    end)
-    -- 添加新日程
-    if type(params.schedules) == "table" and #params.schedules ~= 0  then
-        for i = 1, #params.schedules do
+    -- 如果传递了default_rule参数则进行修改
+    if params.default_rule ~= nil then
+        c:set("parental_control", sid, "default_rule", params.default_rule)
+    end
+
+    -- 如果传递了macs参数则进行修改
+    if params.macs ~= nil then
+      if type(params.macs) == "table" and #params.macs ~= 0  then
+        c:set("parental_control", sid, "macs",params.macs)
+      else
+        c:delete("parental_control", sid, "macs")
+      end
+    end
+
+    -- 如果传递了日程参数则进行修改
+    if params.schedules ~= nil then
+        -- 先删除旧的日程
+        c:foreach("parental_control", "schedule", function(s)
+          if s.group and s.group ==params.id then 
+              c:delete("parental_control", s[".name"])
+          end
+        end)
+        -- 添加新日程
+        if type(params.schedules) == "table" and #params.schedules ~= 0  then
+          for i = 1, #params.schedules do
             if params.schedules[i].week == nil or params.schedules[i].begin == nil or params.schedules[i]["end"] == nil or params.schedules[i].rule == nil then
                 return {
                     err_code = -2,
@@ -199,10 +212,11 @@ M.set_group = function(params)
             end
             local sche = c:add("parental_control", "schedule")
             c:set("parental_control", sche, "group",sid)
-            c:set("parental_control", sche, "week",params.schedules.week)
-            c:set("parental_control", sche, "begin",params.schedules.begin)
-            c:set("parental_control", sche, "end",params.schedules["end"])
-            c:set("parental_control", sche, "rule",params.schedules.rule)
+            c:set("parental_control", sche, "week",params.schedules[i].week)
+            c:set("parental_control", sche, "begin",params.schedules[i].begin .. ":00")
+            c:set("parental_control", sche, "end",params.schedules[i]["end"] .. ":00")
+            c:set("parental_control", sche, "rule",params.schedules[i].rule)
+          end
         end
     end
 
@@ -357,7 +371,7 @@ end
     @out string   ?groups.default_rule 分组使用的默认规则集ID，规则集ID需对应rules参数中返回的规则集ID。
     @out array   ?groups.macs 分组包含的设备MAC地址列表，为字符串类型。
     @out array   ?groups.schedules 分组包含的日程列表，如果对应分组存在日程设置则返回该参数。
-    @out number   ?groups.schedules.week 日常在每周的第几天，允许范围为1-7，依次对应周一到周末。
+    @out number   ?groups.schedules.week 日常在每周的第几天，允许范围为0-6，依次对应周末到周六。
     @out string   ?groups.schedules.begin 日程的开始时间，格式为hh:mm，起始时间必须在结束时间之前。
     @out string   ?groups.schedules.end 日程的结束时间，格式为hh:mm，结束时间必须在起始时间之后。
     @out string   ?groups.schedules.rule 该日程需要使用的规则集ID，规则集ID需对应rules参数中返回的规则集ID。

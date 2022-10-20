@@ -213,8 +213,16 @@ M.set_group = function(params)
             local sche = c:add("parental_control", "schedule")
             c:set("parental_control", sche, "group",sid)
             c:set("parental_control", sche, "week",params.schedules[i].week)
-            c:set("parental_control", sche, "begin",params.schedules[i].begin .. ":00")
-            c:set("parental_control", sche, "end",params.schedules[i]["end"] .. ":00")
+            if(#params.schedules[i].begin < 8) then
+                c:set("parental_control", sche, "begin",params.schedules[i].begin .. ":00")
+            else
+                c:set("parental_control", sche, "begin",params.schedules[i].begin)
+            end
+            if(#params.schedules[i].["end"] < 8) then
+                c:set("parental_control", sche, "end",params.schedules[i]["end"] .. ":00")
+            else
+                c:set("parental_control", sche, "end",params.schedules[i]["end"])
+            end
             c:set("parental_control", sche, "rule",params.schedules[i].rule)
           end
         end

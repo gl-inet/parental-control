@@ -401,6 +401,11 @@ M.get_config = function()
         rule["id"] = s[".name"]
         rule["name"] = s.name
         rule["color"] = s.color or "#FFFFFFFF"
+        if s.apps ~= nil then
+            for i=1,#s.apps do
+                s.apps[i]=tonumber(s.apps[i])
+            end
+        end
         rule["apps"] = s.apps
         if s.exceptions then
             rule["exceptions"] = s.exceptions

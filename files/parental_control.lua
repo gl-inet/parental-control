@@ -6,9 +6,11 @@
 local M = {}
 
 local uci = require "uci"
+local rpc = require "oui.rpc"
+local utils = require "oui.utils"
 
 local function apply()
-    os.execute("/etc/init.d/parental-control restart")
+    os.execute("/etc/init.d/parental_control restart")
 end
 
 
@@ -63,11 +65,12 @@ end
     @in string   ?schedules.end 日程的结束时间，格式为hh:mm，结束时间必须在起始时间之后。
     @in string   ?schedules.rule 该日程需要使用的规则集ID，规则集ID需对应rules参数中传入的规则集ID。
 
+    @out string   id 新增分组的ID
     @out number ?err_code     错误码(-1: 缺少必须参数, -2:传递了shedules但是缺少必须参数)
     @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_group",{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067b","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"17:00","end":"18:00","rule":"cfga067c"}]}]}
-    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"id":"cfga048"}}
 --]]
 M.add_group = function(params)
     if params.name == nil or params.default_rule == nil or params.macs == nil then
@@ -104,7 +107,7 @@ M.add_group = function(params)
     c:commit("parental_control")
     apply()
 
-    return {}
+    return {id=sid}
 end
 
 --[[
@@ -468,7 +471,7 @@ end
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.set_config = function(params)
-    if params.enable == nil or params.drop_anonymous == nil or  params.update == nil then
+    if params.enable == nil or params.drop_anonymous == nil or  params.auto_update == nil then
         return {
             err_code = -1,
             err_msg = "parameter missing"
@@ -478,7 +481,7 @@ M.set_config = function(params)
 
     c:set("parental_control", "global", "enable", params.enable and "1" or "0")
     c:set("parental_control", "global", "drop_anonymous", params.drop_anonymous and "1" or "0")
-    c:set("parental_control", "global", "auto_update", params.update and "1" or "0")
+    c:set("parental_control", "global", "auto_update", params.auto_update and "1" or "0")
     c:commit("parental_control")
     apply()
 

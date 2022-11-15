@@ -35,6 +35,22 @@ time_in_range()
     return 1
 }
 
+time_in_brief()
+{
+    local group="$1"
+    local _time="$2"
+    [ "$_time" = "0" ] && return 0
+    [ $(($TIME_CUR/100)) -eq $(($_time/100)) ] && {
+        uci delete parental_control."$group".brief_time
+        uci delete parental_control."$group".brief_rule
+        uci commit
+        config_unset "$group" brief_rule
+        config_unset "$group" brief_time
+        return 0
+    }
+    return 0
+}
+
 get_current_status()
 {
     local id rule
@@ -124,7 +140,24 @@ schedule_for_each()
     }
     group_default_rule
     config_foreach  load_schedule_cb schedule
-    do_set_groups_rule
+}
+
+brief_for_each()
+{
+    load_brief_cb(){
+        local group=$1
+        local _time rule
+        config_get _time "$group" "brief_time"
+        config_get rule "$group" "brief_rule"
+
+        [ -z "$_time" ] && return
+        time_in_brief "$group" "$_time" && {
+            eval ${group}_rule=\$rule
+            debug_print "time is in brief $_time"
+        }
+    }
+    group_default_rule
+    config_foreach load_brief_cb group
 }
 
 init_parental_control()
@@ -142,6 +175,8 @@ while true;do
     get_current_status
     get_current_time
     schedule_for_each
+    brief_for_each
+    do_set_groups_rule
     sleep $INTERVAL
 done
 

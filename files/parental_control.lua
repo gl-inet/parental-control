@@ -8,7 +8,7 @@ local M = {}
 local uci = require "uci"
 
 local function apply()
-    os.execute("/etc/init.d/parental-control restart")
+    os.execute("/etc/init.d/parental_control restart")
 end
 
 
@@ -478,6 +478,135 @@ M.set_config = function(params)
     apply()
 
     return {}
+end
+--[[
+    @method-type: call
+    @method-name: set_brief
+    @method-desc: 设置临时规则。
+    @in bool     enable  是否使能。
+    @in bool     ?manual_stop  需要手动停止。
+    @in string   ?time  临时规则持续的时间。
+    @in string   ?rule_id  临时规则的规则ID。
+    @in string   group_id    需要设置的分组ID，分组ID通过get_config获取。
+
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_brief",{"enable":true,"manual_stop":false,"time":"18:00","rule_id":"cfg0036","group_id":"cfg2560"}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
+--]]
+M.set_brief = function(params)
+    if params.group_id == nil or params.enable == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
+    local c = uci.cursor()
+    local sid = params.group_id
+
+    if params.enable then
+        if params.manual_stop then
+            c:set("parental_control", sid, "brief_time", "0")
+        else
+            if(#params.schedules[i]["end"] < 8) then
+                c:set("parental_control", sid, "brief_time", params.time  .. ":00")
+            else
+                c:set("parental_control", sid, "brief_time", params.time)
+            end
+        end
+        c:set("parental_control", sid, "brief_rule", params.rule_id)
+    else
+        c:delete("parental_control", sid, "brief_time")
+        c:delete("parental_control", sid, "brief_rule")
+    end
+    c:commit("parental_control")
+    apply()
+
+    return {}
+end
+
+--[[
+    @method-type: call
+    @method-name: get_brief
+    @method-desc: 获取临时规则配置。
+    @in string   group_id    需要获取的分组ID，分组ID通过get_config获取。
+
+    @out bool     enable  是否使能。
+    @out bool     ?manual_stop  需要手动停止。
+    @out string   ?time  临时规则持续的时间。
+    @out string   ?rule_id  临时规则的规则ID。
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_brief"]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"enable":true,"manual_stop":false,"time":"18:00","rule_id":"cfg0036","group_id":"cfg2560"}}
+--]]
+M.get_brief = function(params)
+    if params.group_id == nil then
+        return {
+            err_code = -1,
+            err_msg = "parameter missing"
+        }
+    end
+    local ret = {}
+    local c = uci.cursor()
+    local sid = params.group_id
+    local time = c:get("parental_control", sid, "brief_time") 
+
+    if time ~= nil then
+        ret["enable"] = true
+        ret["rule_id"] = c:get("parental_control", sid, "brief_rule") 
+        if time == "0" then
+            ret["manual_stop"] = true
+        else
+            ret["manual_stop"] = false
+            ret["time"] = time
+        end
+    else
+        ret["enable"] = false
+    end
+
+    return ret
+end
+
+--[[
+    @method-type: call
+    @method-name: get_status
+    @method-desc: 设置临时规则。
+
+    @out array   groups    分组ID。
+    @out string   groups.id    分组ID。
+    @out string   groups.rule  当前正在使用的规则ID。
+    @out bool   ?groups.brief  是否正在使用临时规则。
+    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out string ?err_msg      错误信息
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_status"]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {groups:[{"id":"cfg1356","rule":"drop","brief":false}]}
+--]]
+M.get_status = function(params)
+    local ret = {}
+    local groups = {}
+    local c = uci.cursor()
+
+    if file_exists("/proc/parental-control/group") then
+      for line in io.lines("/proc/parental-control/group") do
+        local fields = {}
+        local group = {}
+        for field in line:gmatch("[^\t]+") do
+            fields[#fields + 1] = field
+        end
+        if #fields > 2 and fields[3] ~= "MACs"  then
+            group["id"] = fields[1]
+            group["rule"] = fields[2]
+            group["brief"] = c:get("parental_control", fields[1], "brief_time") ~= nil
+            groups[#groups + 1] = group
+        end
+      end
+    end
+    ret["groups"] = groups
+    return ret
 end
 
 --[[

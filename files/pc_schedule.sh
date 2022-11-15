@@ -40,7 +40,11 @@ time_in_brief()
     local group="$1"
     local _time="$2"
     [ "$_time" = "0" ] && return 0
-    [ $(($TIME_CUR/100)) -eq $(($_time/100)) ] && {
+
+    local _time_cur=$(echo $TIME_CUR | sed -r 's/0*([0-9])/\1/')
+    _time=$(echo $_time|awk -F: '{printf $1$2$3}' | sed -r 's/0*([0-9])/\1/')
+
+    [ $(($_time_cur/100)) -eq $(($_time/100)) ] && {
         uci delete parental_control."$group".brief_time
         uci delete parental_control."$group".brief_rule
         uci commit

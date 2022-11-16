@@ -13,6 +13,11 @@ local function apply()
     os.execute("/etc/init.d/parental_control restart")
 end
 
+function file_exists(path)
+    local file = io.open(path, "rb")
+    if file then file:close() end
+    return file ~= nil
+end
 
 --[[
     @method-type: call
@@ -517,7 +522,7 @@ M.set_brief = function(params)
         if params.manual_stop then
             c:set("parental_control", sid, "brief_time", "0")
         else
-            if(#params.schedules[i]["end"] < 8) then
+            if(#params.time < 8) then
                 c:set("parental_control", sid, "brief_time", params.time  .. ":00")
             else
                 c:set("parental_control", sid, "brief_time", params.time)

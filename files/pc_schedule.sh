@@ -56,6 +56,17 @@ time_in_brief()
     return 0
 }
 
+check_library_update()
+{
+    [ "$UPDATE_EN" = "0" ] && return 0
+    local _time
+    local _time_cur=$(echo $TIME_CUR | sed -r 's/0*([0-9])/\1/')
+    _time=$(echo $UPDATE_TIME|awk -F: '{printf $1$2$3}' | sed -r 's/0*([0-9])/\1/')
+    [ $(($_time_cur/100)) -eq $(($_time/100)) ] && {
+        update_feature_lib "$UPDATE_URL"
+    }
+}
+
 get_current_status()
 {
     local id rule
@@ -198,6 +209,7 @@ while true;do
     schedule_for_each
     brief_for_each
     do_set_groups_rule
+    check_library_update
     sleep $INTERVAL
 done
 

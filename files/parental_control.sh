@@ -8,6 +8,9 @@ CLEAN_RULE="3"
 CLEAN_GROUP="4"
 SET_RULE="5"
 SET_GROUP="6"
+UPDATE_URL=""
+UPDATE_TIME=""
+UPDATE_EN="0"
 
 str_action_num()
 {
@@ -41,6 +44,9 @@ load_base_config()
 {
     local drop_anonymous
     config_get drop_anonymous "global" "drop_anonymous" "0"
+    config_get UPDATE_TIME "global" "update_time"
+    config_get UPDATE_URL "global" "update_url"
+    config_get UPDATE_EN "global" "auto_update" "0"
 
     json_init
     json_add_int "op" $SET_BASE
@@ -176,4 +182,20 @@ set_group_rule()
     json_str=`json_dump`
     config_apply "$json_str"
     json_cleanup    
+}
+
+update_feature_lib()
+{
+    local url="$1"
+    local cur_v="$(cat /etc/parental_control/app_feature.cfg |head -n1|tr -cd '[0-9]')"
+    local new_v=""
+    curl  -LSs --connect-timeout 30 -m 30 "$url" -o /tmp/app_feature.cfg && {
+        new_v="$(cat /tmp/app_feature.cfg |head -n1|tr -cd '[0-9]')"
+        [ "$new_v" -gt "$cur_v" ] && {
+            logger -t 'parental_control' "update app featere library from $cur_v to $new_v"
+            mv /tmp/app_feature.cfg /etc/parental_control/app_feature.cfg
+            sleep 3 && /etc/init.d/parental_control restart &
+            return
+        }
+    }
 }

@@ -227,7 +227,11 @@ M.set_group = function(params)
                 c:set("parental_control", sche, "begin",params.schedules[i].begin)
             end
             if(#params.schedules[i]["end"] < 8) then
-                c:set("parental_control", sche, "end",params.schedules[i]["end"] .. ":00")
+                if #params.schedules[i]["end"] == "23:59" then
+                    c:set("parental_control", sche, "end",params.schedules[i]["end"] .. ":59")
+                else
+                    c:set("parental_control", sche, "end",params.schedules[i]["end"] .. ":00")
+                end
             else
                 c:set("parental_control", sche, "end",params.schedules[i]["end"])
             end
@@ -377,6 +381,7 @@ end
     @out bool     auto_update  是否自动更新特征库。
     @out array   ?rules  规则集列表,如果规则集不为空则返回。
     @out string  ?rules.id   规则集ID，全局唯一，用于区分不同的规则集。
+    @out bool    ?rules.preset   是否为预置规则。
     @out string  ?rules.name   规则集的名字。
     @out string  ?rules.color   规则集的标签颜色，UI使用。
     @out array   ?rules.apps   规则集包含的应用的ID列表，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
@@ -387,6 +392,7 @@ end
     @out string   ?groups.default_rule 分组使用的默认规则集ID，规则集ID需对应rules参数中返回的规则集ID。
     @out array   ?groups.macs 分组包含的设备MAC地址列表，为字符串类型。
     @out array   ?groups.schedules 分组包含的日程列表，如果对应分组存在日程设置则返回该参数。
+    @out number   ?groups.schedules.id 日程ID。
     @out number   ?groups.schedules.week 日常在每周的第几天，允许范围为0-6，依次对应周末到周六。
     @out string   ?groups.schedules.begin 日程的开始时间，格式为hh:mm，起始时间必须在结束时间之前。
     @out string   ?groups.schedules.end 日程的结束时间，格式为hh:mm，结束时间必须在起始时间之后。
@@ -394,7 +400,7 @@ end
 
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_config"]}
-    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"enable":true,"drop_anonymous":false,"auto_update":false,"rules":[{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]},{"id":"cfga067c","name":"rule2","color":"#aabbccddee","apps":[3003,4004],"exceptions":["[tcp;;;www.google.com;;]"]}],"groups":[{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067a","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c"},{"date":2,"begin":"14:00","end":"15:00","rule":"cfga067c"}]}]}}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"enable":true,"drop_anonymous":false,"auto_update":false,"rules":[{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]},{"id":"cfga067c","name":"rule2","color":"#aabbccddee","apps":[3003,4004],"exceptions":["[tcp;;;www.google.com;;]"]}],"groups":[{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067a","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c","id":"cfga066c"},{"date":2,"begin":"14:00","end":"15:00","rule":"cfga067c","id":"cfga076c"}]}]}}
 --]]
 M.get_config = function()
     local c = uci.cursor()
@@ -407,6 +413,7 @@ M.get_config = function()
     c:foreach("parental_control", "rule", function(s)
         local rule = {}
         rule["id"] = s[".name"]
+        rule["preset"] = s.preset == "1"
         rule["name"] = s.name
         rule["color"] = s.color or "#FFFFFFFF"
         if s.apps ~= nil then
@@ -433,6 +440,7 @@ M.get_config = function()
 
     c:foreach("parental_control", "schedule", function(s)
         local schedule = {}
+        schedule["id"] = s[".name"]
         schedule["group"] = s.group
         schedule["week"] = tonumber(s.week)
         schedule["rule"] = s.rule
@@ -592,6 +600,7 @@ end
     @out string   groups.id    分组ID。
     @out string   groups.rule  当前正在使用的规则ID。
     @out bool   ?groups.brief  是否正在使用临时规则。
+    @in string   ?schedule_id  正在使用的日程ID，如果没有返回则表示当前使用的规则为默认规则或临时规则。
     @out number ?err_code     错误码(-1: 缺少必须参数)
     @out string ?err_msg      错误信息
 
@@ -615,6 +624,12 @@ M.get_status = function(params)
             group["rule"] = fields[2]
             group["brief"] = c:get("parental_control", fields[1], "brief_time") ~= nil
             groups[#groups + 1] = group
+            if file_exists("/var/run/pc_schedule/" .. fields[1]) then
+                local sch_id = utils.readfile("/var/run/pc_schedule/" .. fields[1]);
+                if sch_id then
+                    group["schedule_id"] = string.gsub(sch_id, "\n", "")
+                end 
+            end
         end
       end
     end

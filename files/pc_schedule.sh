@@ -6,6 +6,7 @@
 INTERVAL=60
 WEEK_CUR=1
 TIME_CUR=0
+SCHEDULE_STATUS_DIR="/var/run/pc_schedule"
 
 debug_print()
 {
@@ -31,7 +32,7 @@ time_in_range()
     [ "$week_match" -ne "1" ] && return 1
     local begin="$(echo $2|awk -F: '{printf $1$2$3}')"
     local end="$(echo $3|awk -F: '{printf $1$2$3}')"
-    [ "$TIME_CUR" -ge "$begin" ] && [ "$TIME_CUR" -le "$end" ] && return 0
+    [ "$TIME_CUR" -ge "$begin" ] && [ "$TIME_CUR" -lt "$end" ] && return 0
     return 1
 }
 
@@ -90,6 +91,19 @@ is_rule_change()
     return 0
 }
 
+write_schedule_status()
+{
+    local id=$1
+    local schedule
+    eval shcedule=\$${id}_schedule
+    if [ -n "$shcedule" ];then
+        echo "$shcedule" > ${SCHEDULE_STATUS_DIR}/$id
+        eval ${id}_schedule=""
+    else
+        [ -f "${SCHEDULE_STATUS_DIR}/$id" ] && rm -f ${SCHEDULE_STATUS_DIR}/$id 2>/dev/null
+    fi
+}
+
 do_set_groups_rule()
 {
     local change=0
@@ -102,6 +116,7 @@ do_set_groups_rule()
         local id=$1
         local rule macs
         eval rule=\$${id}_rule
+        write_schedule_status $id
         is_rule_change $id $rule || return 0
         change=1
         debug_print "rule change,group $id use rule $rule"
@@ -139,6 +154,7 @@ schedule_for_each()
             config_get group "$config" "group"
             config_get rule "$config" "rule"
             eval ${group}_rule=\$rule
+            eval ${group}_schedule=\$config
             debug_print "time is in range $week from $begin to $end"
         }
     }
@@ -160,12 +176,13 @@ brief_for_each()
             debug_print "time is in brief $_time"
         }
     }
-    group_default_rule
     config_foreach load_brief_cb group
 }
 
 init_parental_control()
 {
+    mkdir -p $SCHEDULE_STATUS_DIR
+    rm -f $SCHEDULE_STATUS_DIR/*
     load_base_config
     clean_group
     clean_rule

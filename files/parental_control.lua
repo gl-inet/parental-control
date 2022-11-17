@@ -596,7 +596,8 @@ end
     @method-name: get_status
     @method-desc: 设置临时规则。
 
-    @out array   groups    分组ID。
+    @out bool  time_valid 系统时间是否已经同步（0：时间未同步，1：时间已同步）
+    @out array   groups    用户组列表。
     @out string   groups.id    分组ID。
     @out string   groups.rule  当前正在使用的规则ID。
     @out bool   ?groups.brief  是否正在使用临时规则。
@@ -605,12 +606,18 @@ end
     @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_status"]}
-    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {groups:[{"id":"cfg1356","rule":"drop","brief":false}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"time_valid":true,groups:[{"id":"cfg1356","rule":"drop","brief":false}]}
 --]]
 M.get_status = function(params)
     local ret = {}
     local groups = {}
     local c = uci.cursor()
+
+    if file_exists("/var/state/dnsmasqsec") then
+        ret["time_valid"] = true
+    else
+        ret["time_valid"] = false
+    end
 
     if file_exists("/proc/parental-control/group") then
       for line in io.lines("/proc/parental-control/group") do

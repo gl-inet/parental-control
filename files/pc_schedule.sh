@@ -201,6 +201,15 @@ init_parental_control()
     load_group
 }
 
+check_ntp_valid()
+{
+    while [ ! -f "/var/state/dnsmasqsec" ];do
+        logger -t 'parental_control' "ntpd say time is invalid, sleep 5s"
+        sleep 5
+    done
+}
+
+check_ntp_valid
 config_load parental_control
 init_parental_control
 while true;do

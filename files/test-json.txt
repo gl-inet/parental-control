@@ -13,4 +13,5 @@ curl -k http://127.0.0.1/rpc -d '{"jsonrpc":"2.0","id":1,"method":"call","params
 
 #config
 curl -k http://127.0.0.1/rpc -d '{"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_config"]}'
+curl -k http://127.0.0.1/rpc -d '{"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_status"]}'
 curl -k http://127.0.0.1/rpc -d '{"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_config",{"enable":true,"drop_anonymous":false,"auto_update":false}]}'

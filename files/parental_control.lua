@@ -294,7 +294,7 @@ end
 
     @in string   id 需要移除的规则ID，规则ID通过get_config获取。
 
-    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out number ?err_code     错误码(-1: 缺少必须参数, -2: 被删除的规则正在被用作默认规则，-3: 被删除的规则正在被用作临时规则)
     @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","remove_rule",{"id":"cfga067b"}]}
@@ -309,6 +309,28 @@ M.remove_rule = function(params)
     end   
     local c = uci.cursor()
 
+    local ret = {}
+    ret["err_code"] = 0
+    -- 检查待删除的规则是否被用于默认规则或临时规则
+    c:foreach("parental_control", "group", function(s)
+        if s.default_rule == params.id then
+            ret["err_code"] = -2
+        end
+        if s.brief_rule == params.id then
+            ret["err_code"] = -3
+        end
+    end)
+    if ret["err_code"] ~= 0 then
+        ret["err_msg"] = "rule are being used"
+        return ret
+    end
+
+    -- 删除规则的关联日程
+    c:foreach("parental_control", "schedule", function(s)
+        if s.rule == params.id then
+            c:delete("parental_control", s[".name"])
+        end
+    end)
     if params.id then
         c:delete("parental_control", params.id)
     end

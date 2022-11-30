@@ -262,7 +262,8 @@ int get_rule_by_mac(u8 mac[ETH_ALEN], pc_rule_t *rule_ret)
     group = _find_group_by_mac(mac);
     if (!group) {//如果设备不属于任何分组则划分为匿名设备
         if (pc_drop_anonymous) {
-            rule_ret->action = PC_DROP;
+            PC_LMT_DEBUG("Anonymous MAC %pM is DROP\n", mac);
+            rule_ret->action = PC_DROP_ANONYMOUS;
             ret = 0;
         }
         goto EXIT;

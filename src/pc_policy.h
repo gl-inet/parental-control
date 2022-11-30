@@ -3,6 +3,7 @@
 
 #define PC_FEATURE_CONFIG_FILE "/tmp/pc_app_feature.cfg"
 #define NF_DROP_BIT 0x80000000
+#define NF_ACCEPT_BIT 0x40000000
 #define EXCEPT_APP_ID 0xffffffff
 #define MAX_HC_CLIENT_HASH_SIZE 128
 #define MAX_APP_IN_RULE 128
@@ -146,6 +147,7 @@ enum pc_action {
     PC_ACCEPT,
     PC_POLICY_DROP,
     PC_POLICY_ACCEPT,
+    PC_DROP_ANONYMOUS,
 };
 
 typedef struct pc_rule {

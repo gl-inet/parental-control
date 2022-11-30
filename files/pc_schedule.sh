@@ -149,6 +149,7 @@ do_set_groups_rule()
     json_str=`json_dump`
     [ "$change" -eq 1 ] && config_apply "$json_str"
     json_cleanup
+    echo c >/proc/net/nf_conntrack
 }
 
 schedule_for_each()

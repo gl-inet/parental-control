@@ -420,8 +420,8 @@ void pc_get_smac(struct sk_buff *skb,  u8 smac[ETH_ALEN])
     ethhdr = eth_hdr(skb);
     if (ethhdr)
         memcpy(smac, ethhdr->h_source, ETH_ALEN);
-    else
-        memcpy(smac, &skb->cb[40], ETH_ALEN);
+    /*else
+        memcpy(smac, &skb->cb[40], ETH_ALEN);*/
 }
 
 u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
@@ -432,7 +432,6 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     pc_rule_t *rule;
     enum ip_conntrack_info ctinfo;
     struct nf_conn *ct = NULL;
-    struct nf_conn_acct *acct;
     int app_id = 0;
     int drop = 0;
 
@@ -442,7 +441,19 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
         return NF_ACCEPT;
     }
 
-    memset((char *)&flow, 0x0, sizeof(flow_info_t));
+    ct = nf_ct_get(skb, &ctinfo);
+    if (ct) {
+        PC_LMT_DEBUG("ctinfo %d\n", ctinfo);
+/*        if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED ) {
+            ret = NF_ACCEPT;
+            goto EXIT;
+        }*/
+    }
+    else{
+        PC_LMT_DEBUG("no ctinfo found\n");
+    }
+
+    memset((char *)&flow, 0x0, sizeof(flow_info_t));                  
     pc_get_smac(skb,  flow.smac);
     if (is_zero_ether_addr(flow.smac) || is_broadcast_ether_addr(flow.smac)) {
         ret = NF_ACCEPT;
@@ -462,6 +473,12 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
             PC_LMT_DEBUG("from mac %pM action is ACCEPT\n", flow.smac);
             ret = NF_ACCEPT;
             goto EXIT;
+        case PC_DROP_ANONYMOUS:
+            if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED || ctinfo == IP_CT_IS_REPLY)
+                ret = NF_ACCEPT;
+            else
+                ret = NF_DROP;
+            goto EXIT;
         case PC_POLICY_DROP:
         case PC_POLICY_ACCEPT:
             break;
@@ -471,37 +488,6 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     }
 
     if (parse_flow_proto(skb, &flow) < 0) {
-        ret = NF_ACCEPT;
-        goto EXIT;
-    }
-
-    ct = nf_ct_get(skb, &ctinfo);
-    if (ct == NULL || !nf_ct_is_confirmed(ct)) {
-        ret = NF_ACCEPT;
-        goto EXIT;
-    }
-
-    if (ct->mark != 0) {
-        app_id = ct->mark & (~NF_DROP_BIT);
-        if (app_id > 1000 && app_id < 9999) {
-            if (NF_DROP_BIT == (ct->mark & NF_DROP_BIT))
-                drop = 1;
-
-            if (drop) {
-                ret = NF_DROP;
-                goto EXIT;
-            }
-        }
-    }
-    acct = nf_conn_acct_find(ct);
-    if (!acct) {
-        ret = NF_ACCEPT;
-        goto EXIT;
-    }
-    total_packets = (unsigned long long)atomic64_read(&acct->counter[IP_CT_DIR_ORIGINAL].packets)
-                    + (unsigned long long)atomic64_read(&acct->counter[IP_CT_DIR_REPLY].packets);
-
-    if (total_packets > MAX_DPI_PKT_NUM) {
         ret = NF_ACCEPT;
         goto EXIT;
     }
@@ -518,7 +504,6 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
                     &flow.src, flow.sport, &flow.dst, flow.dport, skb->len, flow.app_id);
     }
     if (flow.drop) {
-        ct->mark |= NF_DROP_BIT;
         PC_LMT_INFO("##Drop app %s flow, appid is %d\n", flow.app_name, flow.app_id);
         ret =  NF_DROP;
         goto EXIT;

@@ -444,16 +444,15 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     ct = nf_ct_get(skb, &ctinfo);
     if (ct) {
         PC_LMT_DEBUG("ctinfo %d\n", ctinfo);
-/*        if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED ) {
-            ret = NF_ACCEPT;
-            goto EXIT;
-        }*/
-    }
-    else{
+        /*        if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED ) {
+                    ret = NF_ACCEPT;
+                    goto EXIT;
+                }*/
+    } else {
         PC_LMT_DEBUG("no ctinfo found\n");
     }
 
-    memset((char *)&flow, 0x0, sizeof(flow_info_t));                  
+    memset((char *)&flow, 0x0, sizeof(flow_info_t));
     pc_get_smac(skb,  flow.smac);
     if (is_zero_ether_addr(flow.smac) || is_broadcast_ether_addr(flow.smac)) {
         ret = NF_ACCEPT;

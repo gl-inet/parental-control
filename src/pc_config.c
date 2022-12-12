@@ -87,9 +87,9 @@ static int pc_set_rule_config(cJSON *data_obj, char add)
         return -1;
     }
     for (i = 0; i < cJSON_GetArraySize(arr); i++) {
-        cJSON *rule_obj = NULL, *id_obj = NULL, *action_obj = NULL, *apps_obj = NULL, *app_obj = NULL;
+        cJSON *rule_obj = NULL, *id_obj = NULL, *action_obj = NULL;
         cJSON *blacklist = NULL;
-        unsigned int apps[MAX_APP_IN_RULE] = {0};
+        cJSON *applist = NULL;
         rule_obj = cJSON_GetArrayItem(arr, i);
         if (!rule_obj) {
             PC_ERROR("no rule fund\n");
@@ -105,19 +105,12 @@ static int pc_set_rule_config(cJSON *data_obj, char add)
             PC_ERROR("no rule action fund\n");
             return -1;
         }
-        apps_obj = cJSON_GetObjectItem(rule_obj, "apps");
-        if (apps_obj) {
-            for (j = 0; j < cJSON_GetArraySize(apps_obj) && j < MAX_APP_IN_RULE; j++) {
-                app_obj = cJSON_GetArrayItem(apps_obj, j);
-                if (app_obj)
-                    apps[j] = (unsigned int)(app_obj->valueint);
-            }
-        }
+        applist = cJSON_GetObjectItem(rule_obj, "apps");
         blacklist = cJSON_GetObjectItem(rule_obj, "blacklist");
         if (add)
-            add_pc_rule(id_obj->valuestring, apps, action_obj->valueint, blacklist);
+            add_pc_rule(id_obj->valuestring, applist, action_obj->valueint, blacklist);
         else
-            set_pc_rule(id_obj->valuestring, apps, action_obj->valueint);
+            set_pc_rule(id_obj->valuestring, applist, action_obj->valueint, blacklist);
     }
 
     return 0;

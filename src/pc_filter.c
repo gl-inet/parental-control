@@ -341,19 +341,21 @@ int pc_match_one(flow_info_t *flow, pc_app_t *node)
 
 static int app_in_rule(u_int32_t app, pc_rule_t *rule)
 {
+    pc_app_index_t *node, *n;
     int i;
     if (app < MAX_APP_IN_CLASS) {
         return PC_FALSE;
     }
-
-    for (i = 0; i < MAX_APP_IN_RULE && rule->apps[i]; i++) {
-        if (app == rule->apps[i])
-            return PC_TRUE;
-    }
-    app = app / MAX_APP_IN_CLASS; //如果单个应用不匹配，进一步检查是否匹配应用类型
-    for (i = 0; i < MAX_APP_IN_RULE && rule->apps[i]; i++) {
-        if (app == rule->apps[i])
-            return PC_TRUE;
+    if (!list_empty(&rule->applist)) {
+        list_for_each_entry_safe(node, n, &rule->applist, head) {
+            if (app == node->app_id)
+                return PC_TRUE;
+        }
+        app = app / MAX_APP_IN_CLASS; //如果单个应用不匹配，进一步检查是否匹配应用类型
+        list_for_each_entry_safe(node, n, &rule->applist, head) {
+            if (app == node->app_id)
+                return PC_TRUE;
+        }
     }
     return PC_FALSE;
 }
@@ -362,12 +364,12 @@ static int match_blist_app(flow_info_t *flow, pc_rule_t *rule)
 {
     pc_app_t *app, *n;
     if (!list_empty(&rule->blist)) {
-      list_for_each_entry_safe(app, n, &rule->blist, head) {
-        if (pc_match_one(flow,app)) {
-            PC_LMT_DEBUG("rule %s match blist app %s from mac %pM\n", rule->id, app->app_name, flow->smac);
-            return PC_TRUE;
+        list_for_each_entry_safe(app, n, &rule->blist, head) {
+            if (pc_match_one(flow, app)) {
+                PC_LMT_DEBUG("rule %s match blist app %s from mac %pM\n", rule->id, app->app_name, flow->smac);
+                return PC_TRUE;
+            }
         }
-      }
     }
     return PC_FALSE;
 }
@@ -377,11 +379,11 @@ int app_filter_match(flow_info_t *flow, pc_rule_t *rule)
     pc_app_t *n, *node;
     pc_policy_read_lock();
     pc_app_read_lock();
-    if(rule == NULL || flow == NULL)
+    if (rule == NULL || flow == NULL)
         goto EXIT;
-    if(match_blist_app(flow, rule)){
+    if (match_blist_app(flow, rule)) {
         flow->drop = PC_TRUE;
-        PC_LMT_DEBUG("match blist from mac %pM, policy is %s\n",flow->smac, flow->drop ? "DROP" : "ACCEPT");
+        PC_LMT_DEBUG("match blist from mac %pM, policy is %s\n", flow->smac, flow->drop ? "DROP" : "ACCEPT");
         goto EXIT;
     }
     if (!list_empty(&pc_app_head)) {
@@ -454,7 +456,7 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
         goto EXIT;
     }
 
-    rule = get_rule_by_mac(flow.smac,&action);
+    rule = get_rule_by_mac(flow.smac, &action);
     switch (action) {
         case PC_DROP:
             PC_LMT_DEBUG("from mac %pM action is DROP\n", flow.smac);
@@ -465,14 +467,16 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
             ret = NF_ACCEPT;
             goto EXIT;
         case PC_DROP_ANONYMOUS:
-            if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED || ctinfo == IP_CT_IS_REPLY)
+            if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED || ctinfo == IP_CT_IS_REPLY) {
+                PC_LMT_DEBUG("from mac %pM action is match ct\n", flow.smac);
                 ret = NF_ACCEPT;
-            else{
-                PC_LMT_DEBUG("from mac %pM action is POLICY DROP\n", flow.smac);
+            } else {
+                PC_LMT_DEBUG("from mac %pM action is ANONYMOUS DROP\n", flow.smac);
                 ret = NF_DROP;
             }
             goto EXIT;
         case PC_POLICY_DROP:
+            PC_LMT_DEBUG("from mac %pM action is POLICY DROP\n", flow.smac);
         case PC_POLICY_ACCEPT:
             break;
         default:

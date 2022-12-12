@@ -30,6 +30,17 @@ case $1 in
 esac    
 }
 
+url_to_app_feature()
+{
+	case "$1" in
+		\[*\]) echo "$1"|sed -e "s/\[\|\|\]//g"| tr ',' ' '
+		;;
+		*) echo "tcp;;;$1;;"
+		;;
+	esac
+}
+
+
 config_apply()
 {
     test -z "$1" && return 1
@@ -66,10 +77,10 @@ load_rule()
 
     load_rule_cb(){
         local config=$1
-        local action apps action_str exceptions
+        local action apps action_str blacklist
         config_get action_str "$config" "action"
         config_get apps "$config" "apps"
-        config_get exceptions "$config" "exceptions"
+        config_get blacklist "$config" "blacklist"
         action="$(str_action_num $action_str)"
         json_add_object ""
         json_add_string "id" "$config"  
@@ -81,10 +92,12 @@ load_rule()
             done
             json_select ..
         }
-        [ -n "$exceptions" ] && {
-            json_add_array "exceptions"
-            for except in $exceptions;do
-                json_add_string "" $except
+        [ -n "$blacklist" ] && {
+            json_add_array "blacklist"
+            for item in $blacklist;do
+                for i in $(url_to_app_feature $item);do
+                    json_add_string "" "$i" 
+                done
             done
             json_select ..
         }

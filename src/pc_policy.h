@@ -1,10 +1,12 @@
 #ifndef __PC_POLICY_H__
 #define __PC_POLICY_H__
 
+#include "cJSON.h"
+
 #define PC_FEATURE_CONFIG_FILE "/tmp/pc_app_feature.cfg"
 #define NF_DROP_BIT 0x80000000
 #define NF_ACCEPT_BIT 0x40000000
-#define EXCEPT_APP_ID 0xffffffff
+#define BLIST_ID 0xffffffff
 #define MAX_HC_CLIENT_HASH_SIZE 128
 #define MAX_APP_IN_RULE 128
 #define MAX_MAC_IN_GROUP 128
@@ -26,7 +28,6 @@
 #define GROUP_ID_SIZE 32
 #define MAX_PORT_RANGE_NUM 5
 #define MAX_APP_IN_CLASS 1000
-#define MAX_EXCEPTION_APP_IN_RULE 32
 
 #define PC_TRUE 1
 #define PC_FALSE 0
@@ -156,7 +157,7 @@ typedef struct pc_rule {
     u_int32_t apps[MAX_APP_IN_RULE];
     unsigned int refer_count;
     enum pc_action action;
-    pc_app_t except_apps[MAX_EXCEPTION_APP_IN_RULE];
+    struct list_head  		blist;
 } pc_rule_t;
 
 typedef struct pc_group {
@@ -192,9 +193,8 @@ typedef struct pc_group {
 #define PC_LMT_DEBUG(...)     	LLOG(3, ##__VA_ARGS__)
 
 extern int add_pc_rule(const char *id,  unsigned int apps[MAX_APP_IN_RULE], enum pc_action action,
-                       const char *except_str[MAX_EXCEPTION_APP_IN_RULE]);
-extern int set_pc_rule(const char *id, unsigned int apps[MAX_APP_IN_RULE], enum pc_action action,
-                       const char *except_str[MAX_EXCEPTION_APP_IN_RULE]);
+                       cJSON *blist);
+extern int set_pc_rule(const char *id, unsigned int apps[MAX_APP_IN_RULE], enum pc_action action);
 extern int clean_pc_rule(void);
 
 extern int add_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const char *rule_id);
@@ -202,7 +202,7 @@ extern int set_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], co
 extern int clean_pc_group(void);
 extern pc_group_t *find_group_by_mac(u8 mac[ETH_ALEN]);
 extern enum pc_action get_action_by_mac(u8 mac[ETH_ALEN]);
-extern int get_rule_by_mac(u8 mac[ETH_ALEN], pc_rule_t *rule_ret);
+extern pc_rule_t *get_rule_by_mac(u8 mac[ETH_ALEN], enum pc_action* action);
 
 
 extern int pc_register_dev(void);

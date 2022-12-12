@@ -333,8 +333,8 @@ int pc_load_app_feature_list(void)
 
     load_feature_buf_from_file(&feature_buf);
     if (!feature_buf) {
-        PC_ERROR("error, feature buf is null\n");
-        return -1;
+        PC_ERROR("no app feature load\n");
+        return 0;
     }
     p = begin = feature_buf;
     while (*p++) {

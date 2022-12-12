@@ -6,29 +6,65 @@
 #include <linux/if_ether.h>
 #include <linux/etherdevice.h>
 #include "pc_policy.h"
+#include "cJSON.h"
 
 struct list_head pc_rule_head = LIST_HEAD_INIT(pc_rule_head);
 struct list_head pc_group_head = LIST_HEAD_INIT(pc_group_head);
 
 DEFINE_RWLOCK(pc_policy_lock);
-
-static int rule_add_except_apps(pc_rule_t *rule, const char *except_str[MAX_EXCEPTION_APP_IN_RULE])
+static void rule_init_blist(pc_rule_t *rule)
 {
-    int i, num;
-    char app_name[MAX_APP_NAME_LEN];
-    num = 0;
-    for (i = 0; i < MAX_EXCEPTION_APP_IN_RULE && except_str[i] && (strlen(except_str[i]) >= MIN_FEATURE_STR_LEN); i++) {
-        snprintf(app_name, MAX_APP_NAME_LEN, "%s_except_app_%d", rule->id, i);
-        if (!pc_set_app_by_str(&rule->except_apps[i], EXCEPT_APP_ID, app_name, except_str[i])) {
-            num++;
+    rule->blist.next = &rule->blist;
+    rule->blist.prev = &rule->blist;
+}
+
+static void rule_clean_blist(pc_rule_t *rule)
+{
+    pc_app_t *node;
+    while (!list_empty(&rule->blist)) {
+        node = list_first_entry(&rule->blist, pc_app_t, head);
+        list_del(&(node->head));
+        kfree(node);
+    }
+}
+
+int rule_add_blist_item(pc_rule_t *rule, const char *str)
+{
+    pc_app_t *node = NULL;
+    node = kzalloc(sizeof(pc_app_t), GFP_KERNEL);
+    if (node == NULL) {
+        printk("malloc feature memory error\n");
+        return -1;
+    } else {
+        if (!pc_set_app_by_str(node, BLIST_ID, "blacklist", str)) {
+            list_add(&(node->head), &rule->blist);
+        }
+        else{
+            kfree(node);
+            return -1;
         }
     }
-    PC_DEBUG("Add %d except apps to the rule %s\n", num, rule->id);
-    return num;
+    return 0;
+}
+
+void rule_add_blist(pc_rule_t *rule, cJSON *blist)
+{
+    int size,j;
+    cJSON *item = NULL;
+    rule_init_blist(rule);
+    if (blist) {
+        size = cJSON_GetArraySize(blist);
+        for (j = 0; j < size; j++) {
+                item = cJSON_GetArrayItem(blist, j);
+                if (item) {
+                    rule_add_blist_item(rule, item->valuestring);
+                }
+            }
+    }
 }
 
 int add_pc_rule(const char *id,  unsigned int apps[MAX_APP_IN_RULE], enum pc_action action,
-                const char *except_str[MAX_EXCEPTION_APP_IN_RULE])
+                cJSON *blist)
 {
     pc_rule_t *rule = NULL;
     rule = kzalloc(sizeof(pc_rule_t), GFP_KERNEL);
@@ -40,7 +76,7 @@ int add_pc_rule(const char *id,  unsigned int apps[MAX_APP_IN_RULE], enum pc_act
         memcpy(rule->apps, apps, MAX_APP_IN_RULE);
         rule->action = action;
         rule->refer_count = 0;
-        rule_add_except_apps(rule, except_str);
+        rule_add_blist(rule, blist);
         pc_policy_write_lock();
         list_add(&rule->head, &pc_rule_head);
         pc_policy_write_unlock();
@@ -60,6 +96,7 @@ int remove_pc_rule(const char *id)
                 }
                 pc_policy_write_lock();
                 list_del(&rule->head);
+                rule_clean_blist(rule);
                 kfree(rule);
                 pc_policy_write_unlock();
             }
@@ -75,14 +112,14 @@ int clean_pc_rule(void)
     while (!list_empty(&pc_rule_head)) {
         rule = list_first_entry(&pc_rule_head, pc_rule_t, head);
         list_del(&rule->head);
+        rule_clean_blist(rule);
         kfree(rule);
     }
     pc_policy_write_unlock();
     return 0;
 }
 
-int set_pc_rule(const char *id, unsigned int apps[MAX_APP_IN_RULE], enum pc_action action,
-                const char *except_str[MAX_EXCEPTION_APP_IN_RULE])
+int set_pc_rule(const char *id, unsigned int apps[MAX_APP_IN_RULE], enum pc_action action)
 {
     pc_rule_t *rule = NULL, *n;
     if (!list_empty(&pc_rule_head)) {
@@ -252,46 +289,40 @@ EXIT:
     return action;
 }
 
-int get_rule_by_mac(u8 mac[ETH_ALEN], pc_rule_t *rule_ret)
+pc_rule_t *  get_rule_by_mac(u8 mac[ETH_ALEN], enum pc_action* action)
 {
-    int ret = -1;
     pc_group_t *group;
-    pc_rule_t *rule;
 
     pc_policy_read_lock();
     group = _find_group_by_mac(mac);
-    if (!group) {//如果设备不属于任何分组则划分为匿名设备
-        if (pc_drop_anonymous) {
-            PC_LMT_DEBUG("Anonymous MAC %pM is DROP\n", mac);
-            rule_ret->action = PC_DROP_ANONYMOUS;
-            ret = 0;
-        }
-        goto EXIT;
-    }
-    rule = group->rule;
-    if (!rule) {//TODO 无规则配置的怎么处理？
-        goto EXIT;
-    }
-    *rule_ret = *rule;
-    ret = 0;
-EXIT:
     pc_policy_read_unlock();
-    return ret;
+    if(group){
+        if(group->rule)
+            *action = group->rule->action;
+        else
+            *action = PC_ACCEPT;
+        return group->rule;
+    }
+    else{
+        if (pc_drop_anonymous) {//如果设备不属于任何分组则划分为匿名设备
+            PC_LMT_DEBUG("Dtetected anonymous MAC %pM\n", mac);
+            *action = PC_DROP_ANONYMOUS;
+        }
+        else
+            *action = PC_ACCEPT;
+        return NULL;
+    }
 }
 
-static int except_app_print(struct seq_file *s, pc_rule_t *rule)
+static int rule_blist_print(struct seq_file *s, pc_rule_t *rule)
 {
     range_value_t port_range;
-    pc_app_t *app = NULL;
-    int i, j;
-    seq_printf(s, "EXCEPTION APPS:\n");
+    pc_app_t *app = NULL, *n;
+    int i;
+    seq_printf(s, "Black List:\n");
     seq_printf(s, "ID\tName\tProto\tSport\tDport\tHost_url\tRequest_url\tDataDictionary\n");
-    for (j = 0; j < MAX_EXCEPTION_APP_IN_RULE; j++) {
-        if (rule->except_apps[j].app_id != EXCEPT_APP_ID) {
-            //seq_printf(s, "\n");
-            break;
-        }
-        app = &rule->except_apps[j];
+    if (!list_empty(&rule->blist)) {
+      list_for_each_entry_safe(app, n, &rule->blist, head) {
         seq_printf(s, "%d\t%s\t%d\t%d\t", app->app_id, app->app_name, app->proto, app->sport);
         for (i = 0; i < app->dport_info.num; i++) {
             port_range = app->dport_info.range_list[i];
@@ -309,6 +340,7 @@ static int except_app_print(struct seq_file *s, pc_rule_t *rule)
             seq_printf(s, "%s[%d]=0x%x", (i == 0) ? "\t" : "&&", app->pos_info[i].pos, app->pos_info[i].value);
         }
         seq_printf(s, "\n");
+        }
     }
     return 0;
 }
@@ -328,7 +360,7 @@ static int rule_proc_show(struct seq_file *s, void *v)
                 seq_printf(s, "%d ", rule->apps[i]);
             }
             seq_printf(s, "]\n");
-            except_app_print(s, rule);
+            rule_blist_print(s, rule);
             seq_printf(s, "=======================================================\n\n");
         }
     }

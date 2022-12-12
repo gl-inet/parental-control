@@ -254,12 +254,12 @@ end
     @in string  name   规则集的名字，全局唯一，用于区分不同的规则集。
     @in string  color   规则集的标签颜色，提供给显示UI使用。
     @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
-    @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外。一个规则集中最多添加32个例外特征，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
+    @in array   ?blacklist   规则集的黑名单列表，为字符串类型，该列表遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
     @out number ?err_code     错误码(-1: 缺少必须参数)
     @out string ?err_msg      错误信息
 
-    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_rule",{"name":"rule1","color":"#aabbccddee","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]}]}
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_rule",{"name":"rule1","color":"#aabbccddee","apps":[1001,2002],"blacklist":["[tcp;;;www.google.com;;]"]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.add_rule = function(params)
@@ -277,14 +277,14 @@ M.add_rule = function(params)
     if type(params.apps) == "table" and #params.apps ~= 0  then
         c:set("parental_control", sid, "apps",params.apps)
     end
-    if type(params.exceptions) == "table" and #params.exceptions ~= 0  then
-        c:set("parental_control", sid, "exceptions",params.exceptions)
+    if type(params.blacklist) == "table" and #params.blacklist ~= 0  then
+        c:set("parental_control", sid, "blacklist",params.blacklist)
     end
     c:set("parental_control", sid, "action", "POLICY_DROP")
     c:commit("parental_control")
     apply()
 
-    return {}
+    return {id=sid}
 end
 
 --[[
@@ -349,12 +349,12 @@ end
     @in string  color   规则集的标签颜色，UI使用。
     @in string  name   规则集的名字，全局唯一，用于区分不同的规则集。
     @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
-    @in array   ?exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，一个规则集中最多添加32个例外特征, 遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
+    @in array   ?blacklist   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，一个规则集中最多添加32个例外特征, 遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
     @out number ?err_code     错误码(-1: 缺少必须参数)
     @out string ?err_msg      错误信息
 
-    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_rule",{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]}]}
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_rule",{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"blacklist":["[tcp;;;www.google.com;;]"]}]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
 --]]
 M.set_rule = function(params)
@@ -372,10 +372,10 @@ M.set_rule = function(params)
     if type(params.apps) == "table" and #params.apps ~= 0  then
         c:set("parental_control", sid, "apps",params.apps)
     end
-    if type(params.exceptions) == "table" and #params.exceptions ~= 0  then
-        c:set("parental_control", sid, "exceptions",params.exceptions)
+    if type(params.blacklist) == "table" and #params.blacklist ~= 0  then
+        c:set("parental_control", sid, "blacklist",params.blacklist)
     else
-        c:delete("parental_control", sid, "exceptions")
+        c:delete("parental_control", sid, "blacklist")
     end
     c:commit("parental_control")
     apply()
@@ -401,13 +401,14 @@ end
     @out bool     enable  是否使能。
     @out bool     drop_anonymous  是否禁止匿名设备访问。
     @out bool     auto_update  是否自动更新特征库。
+    @out bool     enable_app  是否使能app特征库。
     @out array   ?rules  规则集列表,如果规则集不为空则返回。
     @out string  ?rules.id   规则集ID，全局唯一，用于区分不同的规则集。
     @out bool    ?rules.preset   是否为预置规则。
     @out string  ?rules.name   规则集的名字。
     @out string  ?rules.color   规则集的标签颜色，UI使用。
     @out array   ?rules.apps   规则集包含的应用的ID列表，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
-    @out array   ?rules.exceptions   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
+    @out array   ?rules.blacklist   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
     @out array   ?groups 设备分组列表,如果分组列表不为空则返回。
     @out string   ?groups.id 分组ID，全局唯一，用于区分不同的设备组。
     @out string   ?groups.name 分组名字。
@@ -422,7 +423,7 @@ end
 
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_config"]}
-    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"enable":true,"drop_anonymous":false,"auto_update":false,"rules":[{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"exceptions":["[tcp;;;www.google.com;;]"]},{"id":"cfga067c","name":"rule2","color":"#aabbccddee","apps":[3003,4004],"exceptions":["[tcp;;;www.google.com;;]"]}],"groups":[{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067a","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c","id":"cfga066c"},{"date":2,"begin":"14:00","end":"15:00","rule":"cfga067c","id":"cfga076c"}]}]}}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"enable":true,"drop_anonymous":false,"auto_update":false,"rules":[{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"blacklist":["[tcp;;;www.google.com;;]"]},{"id":"cfga067c","name":"rule2","color":"#aabbccddee","apps":[3003,4004],"blacklist":["[tcp;;;www.google.com;;]"]}],"groups":[{"name":"group1","macs":["98:6B:46:F0:9B:A4","98:6B:46:F0:9B:A5"],"default_rule":"cfga067a","schedules":[{"week":1,"begin":"12:00","end":"13:00","rule":"cfga067c","id":"cfga066c"},{"date":2,"begin":"14:00","end":"15:00","rule":"cfga067c","id":"cfga076c"}]}]}}
 --]]
 M.get_config = function()
     local c = uci.cursor()
@@ -430,6 +431,7 @@ M.get_config = function()
     local enable = c:get("parental_control", "global", "enable") or '0'
     local drop_anonymous = c:get("parental_control", "global", "drop_anonymous") or '0'
     local auto_update = c:get("parental_control", "global", "auto_update") or '0'
+    local enable_app = c:get("parental_control", "global", "enable_app") or '0'
     local rules ={}
     local groups ={}
     c:foreach("parental_control", "rule", function(s)
@@ -444,8 +446,8 @@ M.get_config = function()
             end
         end
         rule["apps"] = s.apps
-        if s.exceptions then
-            rule["exceptions"] = s.exceptions
+        if s.blacklist then
+            rule["blacklist"] = s.blacklist
         end
         rules[#rules + 1] = rule
     end)
@@ -484,6 +486,7 @@ M.get_config = function()
     ret["enable"] = enable ~= "0"
     ret["drop_anonymous"] = drop_anonymous ~= "0"
     ret["auto_update"] = auto_update ~= "0"
+    ret["enable_app"] = enable_app ~= "0"
     ret["rules"] = rules
     ret["groups"] = groups
 

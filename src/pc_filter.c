@@ -358,16 +358,16 @@ static int app_in_rule(u_int32_t app, pc_rule_t *rule)
     return PC_FALSE;
 }
 
-static int match_except_app(flow_info_t *flow, pc_rule_t *rule)
+static int match_blist_app(flow_info_t *flow, pc_rule_t *rule)
 {
-    int i;
-    for (i = 0; i < MAX_EXCEPTION_APP_IN_RULE; i++) {
-        if (rule->except_apps[i].app_id != EXCEPT_APP_ID)
-            break;
-        if (pc_match_one(flow, &rule->except_apps[i])) {
-            PC_LMT_DEBUG("rule %s match exception app %s from mac %pM\n", rule->id, rule->except_apps[i].app_name, flow->smac);
+    pc_app_t *app, *n;
+    if (!list_empty(&rule->blist)) {
+      list_for_each_entry_safe(app, n, &rule->blist, head) {
+        if (pc_match_one(flow,app)) {
+            PC_LMT_DEBUG("rule %s match blist app %s from mac %pM\n", rule->id, app->app_name, flow->smac);
             return PC_TRUE;
         }
+      }
     }
     return PC_FALSE;
 }
@@ -375,10 +375,18 @@ static int match_except_app(flow_info_t *flow, pc_rule_t *rule)
 int app_filter_match(flow_info_t *flow, pc_rule_t *rule)
 {
     pc_app_t *n, *node;
+    pc_policy_read_lock();
     pc_app_read_lock();
+    if(rule == NULL || flow == NULL)
+        goto EXIT;
+    if(match_blist_app(flow, rule)){
+        flow->drop = PC_TRUE;
+        PC_LMT_DEBUG("match blist from mac %pM, policy is %s\n",flow->smac, flow->drop ? "DROP" : "ACCEPT");
+        goto EXIT;
+    }
     if (!list_empty(&pc_app_head)) {
         list_for_each_entry_safe(node, n, &pc_app_head, head) {
-            int except = PC_FALSE;
+
             if (!app_in_rule(node->app_id, rule)) {
                 continue;
             }
@@ -388,13 +396,9 @@ int app_filter_match(flow_info_t *flow, pc_rule_t *rule)
                 } else {
                     flow->drop = PC_FALSE;
                 }
-                except = match_except_app(flow, rule);
-                if (except) { //例外规则匹配
-                    flow->drop = !flow->drop;
-                }
                 strcpy(flow->app_name, node->app_name);
                 flow->app_id = node->app_id;
-                PC_LMT_DEBUG("match app %d from mac %pM%s, policy is %s\n", node->app_id, flow->smac, except ? ", but in exception list" : "", flow->drop ? "DROP" : "ACCEPT");
+                PC_LMT_DEBUG("match app %d from mac %pM, policy is %s\n", node->app_id, flow->smac, flow->drop ? "DROP" : "ACCEPT");
                 goto EXIT;
             }
         }
@@ -402,6 +406,7 @@ int app_filter_match(flow_info_t *flow, pc_rule_t *rule)
     flow->drop = PC_FALSE;
 EXIT:
     pc_app_read_unlock();
+    pc_policy_read_unlock();
     return 0;
 }
 
@@ -432,25 +437,15 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     pc_rule_t *rule;
     enum ip_conntrack_info ctinfo;
     struct nf_conn *ct = NULL;
-    int app_id = 0;
-    int drop = 0;
+    enum pc_action action;
 
-    rule = kzalloc(sizeof(pc_rule_t), GFP_KERNEL);
-    if (rule == NULL) {
-        PC_ERROR("malloc rule memory error\n");
-        return NF_ACCEPT;
-    }
 
     ct = nf_ct_get(skb, &ctinfo);
-    if (ct) {
+    /*if (ct) {
         PC_LMT_DEBUG("ctinfo %d\n", ctinfo);
-        /*        if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED ) {
-                    ret = NF_ACCEPT;
-                    goto EXIT;
-                }*/
     } else {
         PC_LMT_DEBUG("no ctinfo found\n");
-    }
+    }*/
 
     memset((char *)&flow, 0x0, sizeof(flow_info_t));
     pc_get_smac(skb,  flow.smac);
@@ -459,11 +454,8 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
         goto EXIT;
     }
 
-    if (get_rule_by_mac(flow.smac, rule)) {
-        ret = NF_ACCEPT;
-        goto EXIT;
-    }
-    switch (rule->action) {
+    rule = get_rule_by_mac(flow.smac,&action);
+    switch (action) {
         case PC_DROP:
             PC_LMT_DEBUG("from mac %pM action is DROP\n", flow.smac);
             ret = NF_DROP;
@@ -475,8 +467,10 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
         case PC_DROP_ANONYMOUS:
             if (ctinfo == IP_CT_ESTABLISHED || ctinfo == IP_CT_RELATED || ctinfo == IP_CT_IS_REPLY)
                 ret = NF_ACCEPT;
-            else
+            else{
+                PC_LMT_DEBUG("from mac %pM action is POLICY DROP\n", flow.smac);
                 ret = NF_DROP;
+            }
             goto EXIT;
         case PC_POLICY_DROP:
         case PC_POLICY_ACCEPT:
@@ -484,6 +478,11 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
         default:
             ret = NF_ACCEPT;
             goto EXIT;
+    }
+
+    if (rule == NULL) {
+        ret = NF_ACCEPT;
+        goto EXIT;
     }
 
     if (parse_flow_proto(skb, &flow) < 0) {
@@ -509,7 +508,6 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     }
     ret = NF_ACCEPT;
 EXIT:
-    kfree(rule);
     return ret;
 }
 

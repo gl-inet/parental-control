@@ -19,6 +19,20 @@ function file_exists(path)
     return file ~= nil
 end
 
+function random_uci_section(uci_cursor,uci_type)
+    local n
+    local section
+    math.randomseed(os.time())
+    for i=1,1000,1 do
+        n = math.random(1000000,9999999)
+        section = uci_type .. tostring(n)
+        if not uci_cursor:get("parental_control", section) then
+            return section
+        end
+    end
+    return nil
+end
+
 --[[
     @method-type: call
     @method-name: get_app_list
@@ -88,6 +102,9 @@ M.add_group = function(params)
     local c = uci.cursor()
 
     local sid = c:add("parental_control", "group")
+    local nsid = random_uci_section(c,"group") or sid;
+    c:rename("parental_control", sid, nsid)
+    sid = nsid
     c:set("parental_control", sid, "name", params.name)
     c:set("parental_control", sid, "default_rule", params.default_rule)
     if type(params.macs) == "table" and #params.macs ~= 0  then
@@ -102,6 +119,9 @@ M.add_group = function(params)
                 }
             end
             local sche = c:add("parental_control", "schedule")
+            local nsche = random_uci_section(c,"sche") or sche;
+            c:rename("parental_control", sche, nsche)
+            sche = nsche
             c:set("parental_control", sche, "group",sid)
             c:set("parental_control", sche, "week",params.schedules[i].week)
             c:set("parental_control", sche, "begin",params.schedules[i].begin)
@@ -219,6 +239,9 @@ M.set_group = function(params)
                 }
             end
             local sche = c:add("parental_control", "schedule")
+            local nsche = random_uci_section(c,"sche") or sche;
+            c:rename("parental_control", sche,nsche)
+            sche = nsche
             c:set("parental_control", sche, "group",sid)
             c:set("parental_control", sche, "week",params.schedules[i].week)
             if(#params.schedules[i].begin < 8) then
@@ -256,6 +279,7 @@ end
     @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
     @in array   ?blacklist   规则集的黑名单列表，为字符串类型，该列表遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
+    @out number id     新建规则的ID
     @out number ?err_code     错误码(-1: 缺少必须参数)
     @out string ?err_msg      错误信息
 
@@ -272,6 +296,9 @@ M.add_rule = function(params)
     local c = uci.cursor()
 
     local sid = c:add("parental_control", "rule")
+    local nsid = random_uci_section(c,"rule") or sid;
+    c:rename("parental_control", sid,nsid)
+    sid = nsid
     c:set("parental_control", sid, "name", params.name)
     c:set("parental_control", sid, "color", params.color)
     if type(params.apps) == "table" and #params.apps ~= 0  then

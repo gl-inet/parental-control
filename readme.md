@@ -1,124 +1,240 @@
 # parental-control
+## What this project does
+This project implements the parental control function. There are many useful open source projects to implement parental control, but some of them are too simple to realize the application of DPI, and some projects are too heavy and need to occupy a lot of resources. Therefore, I developed this project, which can realize simple and efficient DPI function without occupying a lot of hardware resources. This project works in kernel space, and almost all devices running openwrt system can work.
 
-## 代码框架
+This project is currently integrated into the glinet 4.2.0 firmware or higher.
 
-![framework](./img/framework.svg)
+![play](./img/play.gif)
 
-应用层主要提供配置，对外提供API并且实现不同时间的策略切换
+## How to compile
+We need to clone this project into openwrt's package directory and then, from menuconfig, select **kmod-gl-sdk4-parental control**.
+Because it is a kernel module, it usually needs to be compiled with firmware.
 
-内核在linux netfilter的forward处添加了一个钩子，实现了一个过滤器，通过维护group ,rule, app等3个链表元素之间的绑定关系实现设备组，规则集以及应用过滤的需求。
+If you are sure that your current firmware already contains the ipt-conntrack related symbols, you can also install the compiled kmod directly by using the following method.
 
-proc文件节点主要提供一些状态，便于调试和获取状态
-
-应用层和内核层的交互通过/dev/parental_control设备实现
-
-### 引用关系
-
-group ,rule, app在/dev/parental_control中的引用关系如下
-
-![relationship ](./img/relationship .svg)
-
-### 过滤器过滤流程
-
-过滤器的设计尽量保证所有数据高效通过，尽可能减少数据分析对网络性能的消耗
-
-![filter-flow](./img/filter-flow.svg)
-
-
-
-## 特征库语法
-
-特征库为txt文本类型格式，每一行代表一个应用，一个完整的应用描述包括 ID，应用名，以及特征集；
-
-特征集可以由单个或多个特征组成，多个特征之间使用逗号分隔。
-
-#### 应用描述语法
+First, get the hash of the current kernel in the firmware with the following command
 
 ```
-id name:[feature1,feature2，feature3]
+opkg info  kernel
 ```
 
-| 字段    | 描述                                                         |
-| ------- | ------------------------------------------------------------ |
-| id      | 应用ID，全局唯一，是真正用于区分不同应用的字段，增加一个APP时需要组内最大ID加1，如聊天类的appid当前最大为1005，现在增加一个app，则id为1006。<br />appid的组成：分类id和组内id<br />分组id=appid/1000取整，如8001的分类id为8 |
-| name    | 应用名字，仅用于直观阅读，不用于应用之间的区分.如微信，百度等 |
-| feature | 数据包特征描述，可以包含协议，端口，网址，数据字典等内容，具体见特征描述语法中的内容 |
-
-
-
-#### 特征（上表中的feature字段）描述语法
-
-``` 
-proto;sport;dport;host;request;dict1|dict2|dict3
-```
-
-| 字段    | 描述                                                         |
-| ------- | ------------------------------------------------------------ |
-| proto   | 传输层协议（tcp或udp）                                       |
-| sport   | 源端口                                                       |
-| dport   | 目的端口，可以为单个端口，例如8888，也可以为端口范围，例如8888-9999，可以通过叹号对端口取反，例如 !8888 或!8888-9999 |
-| host    | 访问的主机或域名，域名支持模糊匹配，如果需要过滤www.baidu.com, 可以只输入baidu |
-| request | 请求资源的关键字<br />例如请求www.baidu.com/images/test.png<br />可以配置将request设置为images/test.png<br />需要注意的是，request字段仅支持http，不支持https |
-| dict    | 数据字典描述，可以通过数据包中不同位置的数据值来匹配应用，一个特征中可以包括多个数据字典，多个数据字典之间使用\|进行分割，具体请见字典语法中的描述 |
-
-
-
-#### 字典（上表中dict字段）描述语法
+Returns the result might be as follows, the **57d388dbd346719758aae2131362f842** is the kernel hash
 
 ```
-position:value
+root@GL-AXT1800:~# opkg info  kernel
+Package: kernel
+Version: 4.4.60-1-57d388dbd346719758aae2131362f842
+Depends: libc
+Status: install user installed
+Architecture: arm_cortex-a7
+Installed-Time: 1672139411
 ```
 
-| 字段     | 描述                                                         |
-| -------- | ------------------------------------------------------------ |
-| position | 网络数据包中data字段中的相对位置（十进制表示），如果该字段为负数，则表示data往前的位置，例如，-1表示在数据包中data字段开始的位置往前偏移一个字节，如果该字段为正数则表示往后偏移。 |
-| value    | 对应position位置的数据值（十六进制表示）                     |
+We can then compile using this hash value
+
+```
+make package/parental-control/compile LINUX_VERMAGIC:=57d388dbd346719758aae2131362f842
+```
 
 
 
-## 配置文件
+## How to use
+### use the shcedule
+Under the openwrt system, all configurations are managed through the uci.
+We already preset the accept and drop rules, we can also create our own using the following command.
 
-在/etc/config/parental_contorl文件中对应用进行配置，配置文件各部分描述如下
+```
+uci set parental_control.myrule=rule
+uci set parental_control.myrule.name='myrule'
+uci add_list parental_control.myrule.blacklist='google.com'
+uci set parental_control.myrule.action='POLICY_DROP'
+```
+Next, create a device group to manage your devices.
+```
+uci set parental_control.mygroup=group
+uci set parental_control.mygroup.name='mygroup'
+uci set parental_control.mygroup.default_rule='myrule'
+uci add_list parental_control.mygroup.macs='72:B7:xx:xx:xx:xx'
+```
+Next, we can create a schedule to dynamically switch the rule.
+```
+uci set parental_control.sche1780758.week='6'
+uci set parental_control.sche1780758.begin='00:00:00'
+uci set parental_control.sche1780758.end='23:59:00'
+uci set parental_control.sche1780758.rule='accept'
+```
+Finally, please make sure your time zone is synchronized and we'll enable it
+```
+uci set parental_control.global.enable='1'
+uci commit
+/etc/init.d/parental_control restart
+```
+### check working status
+When you see the **/proc/parents-control/** folder created, it means the program is working.
 
-### global
+**/proc/parental-control/rule** will show all rule states.
 
-| 字段           | 必要性 | 描述                         |
-| -------------- | ------ | ---------------------------- |
-| enable         | Y      | 布尔值，是否使能应用         |
-| drop_anonymous | Y      | 布尔值，是否禁止匿名设备上网 |
-| auto_update    | Y      | 布尔值，是否自动更新特征库   |
+**/proc/parental-control/group** will show all group states.
+
+**/proc/parental-control/app**  will show all app states.
+
+**/proc/parental-control/drop_anonymous** will show the Internet status of the anonymous device.
+
+### use the app feature library
+**/proc/parental-control/app** show the currently loaded app feature library, which we can use in rule by id, for example
+```
+uci add_list parental_control.myrule.apps='1001'
+uci add_list parental_control.myrule.apps='1002'
+uci add_list parental_control.myrule.apps='1003'
+uci commit
+/etc/init.d/parental_control restart
+```
+### use the brief rule
+The brief rule is used to temporarily switch rule. This rule can last for a specified period of time and then will be cleared automatically. If you want to keep using the brief rule,  set the brief_time parameter to 0.
+```
+uci set parental_control.mygroup.brief_time='02:52:00'
+uci set parental_control.mygroup.brief_rule='myrule'
+uci commit
+/etc/init.d/parental_control restart
+```
+### Configuration  description
+
+Configure applications in the /etc/config/parental_contorl file. The configuration file is described as follows.
+
+#### global
+
+| Name           | Required | Description                                                  |
+| -------------- | -------- | ------------------------------------------------------------ |
+| enable         | Y        | Boolean; Whether to enable the application                   |
+| drop_anonymous | Y        | Boolean; Whether to deny anonymous devices access to the Internet |
+| auto_update    | Y        | Boolean; Whether to automatically update the APP feature library |
+| update_time    | N        | String; Update time of APP feature library                   |
+| update_url     | N        | String; Get the update URL of APP feature library            |
+| enable_app     | N        | Boolean; Use it for glinet UI                                |
 
 
 
 ### rule
 
-| 字段       | 必要性 | 描述                                                         |
-| ---------- | ------ | ------------------------------------------------------------ |
-| name       | N      | 字符串，规则名，无实际用途                                   |
-| action     | Y      | 字符串，用于设置rule的动作，可能值为DROP,ACCEPT,POLICY_DROP,POLICY_ACCEPT, 其他值将会被忽略 |
-| apps       | N      | 整数列表，匹配的应用列表                                     |
-| exceptions | N      | 字符串列表，例外特征，需满足特征描述语法                     |
-|            |        |                                                              |
+| Name      | Required | Description                                                  |
+| --------- | -------- | ------------------------------------------------------------ |
+| name      | N        | String; The name of the rule, no use                         |
+| action    | Y        | String; Action used to set the rule. Possible values are DROP,ACCEPT,POLICY_DROP,POLICY_ACCEPT. Other values are ignored. |
+| apps      | N        | List; List of application ids to be matched by the rule      |
+| blacklist | N        | List; A blacklist list of rules that will be matched in preference to apps. Each element can be a URL or a APP feature library syntax. |
+| color     | N        | String; Use it for glinet UI                                 |
+| preset    | N        | Boolean; Use it for glinet UI                                |
 
 
 
 ### group
 
-| 字段         | 必要性 | 描述                                                         |
-| ------------ | ------ | ------------------------------------------------------------ |
-| name         | N      | 字符串，规则名，无实际用途                                   |
-| default_rule | Y      | 字符串，默认规则，必须对应到一个rule的uci section字段，**注意不是name** |
-| macs         | N      | 字符串列表，用户组的mac地址列表，格式为xx:xx:xx:xx:xx:xx     |
+| Name         | Required | Description                                                  |
+| ------------ | -------- | ------------------------------------------------------------ |
+| name         | N        | String; The name of the group, no use                        |
+| default_rule | Y        | String; Must correspond to the uci section field of a rule. Note that it is **not name** of rule |
+| macs         | N        | List; MAC address list of the  group, the format is xx:xx:xx:xx:xx:xx |
+| brief_rule   | N        | String; Temporary rules will be automatically deleted when the brief_time condition is met. Must correspond to the uci section field of a rule. |
+| brief_time   | N        | String; The duration of the brief_rule. If this value is 0, it will never end |
 
 
 
 ### schedule
 
-| 字段  | 必要性 | 描述                                                         |
-| ----- | ------ | ------------------------------------------------------------ |
-| group | Y      | 字符串，作用于哪个group，必须对应到一个group的uci section字段，**注意不是name** |
-| week  | Y      | 整数列表，作用在一周的哪一天，允许范围为1-7，对应周一到周末  |
-| begin | Y      | 字符串，在一天的哪个时间点开始,格式为hh:mm:ss                |
-| end   | Y      | 字符串，在一天的哪个时间点结束,格式为hh:mm:ss，时间值必须在begin字段的时间值之后 |
-| rule  | Y      | 字符串，在begin-end时间段内使用哪个rule, 必须对应到一个rule的uci section字段，**注意不是name** |
+| Name  | Required | Description                                                  |
+| ----- | -------- | ------------------------------------------------------------ |
+| group | Y        | String; For which group it is valid, it must correspond to the uci section field of a group. Note that it is **not name** of group |
+| week  | Y        | String; On which day of the week it takes effect. The allowable range is 0 to 6, which corresponds to Sunday to Saturday. The format can be '3' or '3 4 5' |
+| begin | Y        | String; The start time of the schedule. format is hh:mm:ss   |
+| end   | Y        | String; The end time of the schedule, must be later than the begin time. format is hh:mm:ss; |
+| rule  | Y        | The rule to be used in the begin-end period must correspond to the uci section field of a rule. |
+
+
+## How is working
+
+
+
+![framework](./img/framework.svg)
+
+The application layer mainly provides configuration, external API and implements policy switching at different times.
+
+The kernel adds a hook at the forward of linux netfilter to realize a filter. By maintaining the binding relationship between group,rule, app and other 3 linked list elements, the kernel realizes the requirement of device group,rule set and application filtering.
+
+The proc file node mainly provides states for easy debugging and state retrieval.
+
+The interaction between the application layer and the kernel layer is implemented through the **/dev/parental_control** device
+
+### Reference relationship
+
+The reference relationships of group,rule, and app in /dev/parental_control are as follows.
+
+![relationship ](./img/relationship.svg)
+
+### Filter flow
+
+Filters are designed to ensure that all data passes through efficiently and minimize the consumption of data analysis on network performance.
+
+![filter-flow](./img/filter-flow.svg)
+
+
+
+## APP feature library syntax
+
+The  feature library is in txt text format. Each line represents an application. A complete application description includes the ID, application name, and feature set.
+
+A feature set can consist of a single feature or multiple features separated by commas.
+
+#### APP description syntax
+
+```
+id name:[feature1,feature2，feature3]
+```
+
+| Name    | Description                                                  |
+| ------- | ------------------------------------------------------------ |
+| id      | Application ID, which is globally unique, is a field used to distinguish different applications. When adding an app, the maximum ID of the group needs to be increased by 1. For example, the current maximum value of the appid of the chat class is 1005. <br />appid Components: class id and app id<br /> class id=appid/1000 Integer, for example, the class id of 8001 is 8 |
+| name    | The name of the application is for visual reading only. It is not used to distinguish between applications. Such as wechat, Baidu and so on |
+| feature | The packet feature description can contain content such as protocol, port, url, and data dictionary. For details, see the **feature  syntax**. |
+
+
+
+#### feature syntax
+
+``` 
+proto;sport;dport;host;request;dict1|dict2|dict3
+```
+
+| Name    | Description                                                  |
+| ------- | ------------------------------------------------------------ |
+| proto   | Transport layer protocol (tcp or udp)                        |
+| sport   | The source port                                              |
+| dport   | The destination port can be a single port, for example, 8888, or a port range, for example, 8888-9999. The destination port can be reversed by an exclamation mark, for example,! 8888 or! 8888-9999. |
+| host    | Domain names support fuzzy matching. If you want to filter www.baidu.com, only baidu can be entered. |
+| request | Request resources keyword <br / > such as request www.baidu.com/images/test.png <br / > you can configure the set request to images/test.png<br / > Note that only supports HTTP request field, https not supported |
+| dict    | Data dictionary description, can pass packets in different position of data values to match the application, a feature can include multiple data dictionary, use '\|' segmentation between multiple data dictionary. For details, see the **dict  syntax**. |
+
+
+
+#### dict syntax
+
+```
+position:value
+```
+
+| Name     | Description                                                  |
+| -------- | ------------------------------------------------------------ |
+| position | The relative position (in decimal) of the data field in a network packet. If the field is negative, it indicates the position in front of the data. For example, -1 indicates the offset one byte from the beginning of the data field in the packet, and if the field is positive, it indicates the offset back. |
+| value    | Data value corresponding to position (in hexadecimal)        |
+
+#### A complete example
+```
+4005 mogu:[tcp;;;mogujie;;,tcp;;;mogucdn;;,tcp;;;;;00:73|01:ea|02:68|03:fb|04:3f] 
+```
+In the above example, the appid is 4005 and the app name is mogu.
+The app has three features. The first two features match the domain name, and the later features will compare the data of the specified position in the data packet.
+
+
+## Submit app feature
+I will save all the app features in the open source project. If you want to add your app to the database, you can submit your app description through a pull request.
+
 

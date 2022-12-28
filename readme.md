@@ -1,6 +1,12 @@
 # parental-control
 ## What this project does
-This project implements the parental control function. There are many useful open source projects to implement parental control, but some of them are too simple to realize the application of DPI, and some projects are too heavy and need to occupy a lot of resources. Therefore, I developed this project, which can realize simple and efficient DPI function without occupying a lot of hardware resources. This project works in kernel space, and almost all devices running openwrt system can work.
+This project implements the parental control function. 
+* Manage device groups and dynamically adjust Internet access policies according to schedules.
+* Support application feature identification.
+* Support temporary modification of Internet access policies.
+* Prohibit unmanaged devices from accessing the Internet.
+
+There are many useful open source projects to implement parental control, but some of them are too simple to realize the application of DPI, and some projects are too heavy and need to occupy a lot of resources. Therefore, I developed this project, which can realize simple and efficient DPI function without occupying a lot of hardware resources. This project works in kernel space, and almost all devices running openwrt system can work.
 
 This project is currently integrated into the glinet 4.2.0 firmware or higher.
 

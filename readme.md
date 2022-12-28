@@ -58,10 +58,11 @@ uci add_list parental_control.mygroup.macs='72:B7:xx:xx:xx:xx'
 ```
 Next, we can create a schedule to dynamically switch the rule.
 ```
-uci set parental_control.sche1780758.week='6'
-uci set parental_control.sche1780758.begin='00:00:00'
-uci set parental_control.sche1780758.end='23:59:00'
-uci set parental_control.sche1780758.rule='accept'
+uci set parental_control.mysche='schedule'
+uci set parental_control.mysche.week='6'
+uci set parental_control.mysche.begin='00:00:00'
+uci set parental_control.mysche.end='23:59:00'
+uci set parental_control.mysche.rule='accept'
 ```
 Finally, please make sure your time zone is synchronized and we'll enable it
 ```
@@ -235,6 +236,6 @@ The app has three features. The first two features match the domain name, and th
 
 
 ## Submit app feature
-I will save all the app features in the open source project. If you want to add your app to the database, you can submit your app description through a pull request.
+I will save all the app features in the open source project. If you want to add your app to the database, you can submit your app feature through a pull request.
 
 

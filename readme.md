@@ -195,7 +195,7 @@ id name:[feature1,feature2，feature3]
 | ------- | ------------------------------------------------------------ |
 | id      | Application ID, which is globally unique, is a field used to distinguish different applications. When adding an app, the maximum ID of the group needs to be increased by 1. For example, the current maximum value of the appid of the chat class is 1005. <br />appid Components: class id and app id<br /> class id=appid/1000 Integer, for example, the class id of 8001 is 8 |
 | name    | The name of the application is for visual reading only. It is not used to distinguish between applications. Such as wechat, Baidu and so on |
-| feature | The packet feature description can contain content such as protocol, port, url, and data dictionary. For details, see the **feature  syntax**. |
+| feature | An APP description consists of a single or multiple features, and features can have multiple features without quantity restriction.<br />The  feature description can contain content such as protocol, port, url, and data dictionary.  For details, see the **feature  syntax**. |
 
 
 
@@ -210,11 +210,9 @@ proto;sport;dport;host;request;dict1|dict2|dict3
 | proto   | Transport layer protocol (tcp or udp)                        |
 | sport   | The source port                                              |
 | dport   | The destination port can be a single port, for example, 8888, or a port range, for example, 8888-9999. The destination port can be reversed by an exclamation mark, for example,! 8888 or! 8888-9999. |
-| host    | Domain names support fuzzy matching. If you want to filter www.baidu.com, only baidu can be entered. |
+| host    | Domain names support fuzzy matching. If you want to filter www.baidu.com, only baidu can be entered. For details, see the **domain regexp**. |
 | request | Request resources keyword <br / > such as request www.baidu.com/images/test.png <br / > you can configure the set request to images/test.png<br / > Note that only supports HTTP request field, https not supported |
-| dict    | Data dictionary description, can pass packets in different position of data values to match the application, a feature can include multiple data dictionary, use '\|' segmentation between multiple data dictionary. For details, see the **dict  syntax**. |
-
-
+| dict    | A feature can have more than one dict, with no limit on the number.<br />Data dictionary description, can pass packets in different position of data values to match the application, a feature can include multiple data dictionary, use '\|' segmentation between multiple data dictionary. For details, see the **dict  syntax**. |
 
 #### dict syntax
 
@@ -227,7 +225,19 @@ position:value
 | position | The relative position (in decimal) of the data field in a network packet. If the field is negative, it indicates the position in front of the data. For example, -1 indicates the offset one byte from the beginning of the data field in the packet, and if the field is positive, it indicates the offset back. |
 | value    | Data value corresponding to position (in hexadecimal)        |
 
+#### domain regexp
+
+| Name            | Description                                          | Match example                           |
+| --------------- | ---------------------------------------------------- | --------------------------------------- |
+| baidu           | Matches as long as the specified string is included. | baidu.com  www.baidu.com  sub1baidusub2 |
+| baidu.com$      | Matches a specific string ending.                    | www.baidu.com sub1baidu.com             |
+| ^baidu.com      | Matches the beginning of a specific string           | baidu.com baidu.com.cn                  |
+| ^www.baidu.com$ | Matches the beginning and end of the string          | www.baidu.com                           |
+
+
+
 #### A complete example
+
 ```
 4005 mogu:[tcp;;;mogujie;;,tcp;;;mogucdn;;,tcp;;;;;00:73|01:ea|02:68|03:fb|04:3f] 
 ```

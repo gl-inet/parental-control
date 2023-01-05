@@ -27,6 +27,7 @@
 #define GROUP_ID_SIZE 32
 #define MAX_PORT_RANGE_NUM 5
 #define MAX_APP_IN_CLASS 1000
+#define MAX_SRC_DEVNAME_SIZE 129
 
 #define PC_TRUE 1
 #define PC_FALSE 0
@@ -47,6 +48,7 @@
 
 
 extern u8 pc_drop_anonymous;
+extern char pc_src_dev[129];
 extern struct list_head pc_app_head;
 extern rwlock_t pc_app_lock;
 extern rwlock_t pc_policy_lock;

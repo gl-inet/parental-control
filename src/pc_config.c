@@ -12,6 +12,7 @@
 #define PC_DEV_NAME "parental_control"
 
 u8 pc_drop_anonymous = 0;
+char pc_src_dev[MAX_SRC_DEVNAME_SIZE] = {0};
 
 static struct mutex pc_cdev_mutex;
 
@@ -58,24 +59,31 @@ static int mac_to_hex(u8 *mac, u8 *mac_hex)
 
 static int pc_set_base_config(cJSON *data_obj)
 {
-    cJSON *cfgobj = NULL;
+    cJSON *aouobj = NULL, *srcobj = NULL;
     if (!data_obj) {
         PC_ERROR("data obj is null\n");
         return -1;
     }
-    cfgobj = cJSON_GetObjectItem(data_obj, "drop_anonymous");
-    if (!cfgobj) {
-        PC_ERROR("cfgobj obj is null\n");
+    aouobj = cJSON_GetObjectItem(data_obj, "drop_anonymous");
+    if (!aouobj) {
+        PC_ERROR("aouobj obj is null\n");
         return -1;
     }
-    pc_drop_anonymous = cfgobj->valueint;
+    pc_drop_anonymous = aouobj->valueint;
+
+    srcobj = cJSON_GetObjectItem(data_obj, "src_dev");
+    if (!srcobj) {
+        PC_ERROR("srcobj obj is null\n");
+        return -1;
+    }
+    strncpy(pc_src_dev, srcobj->valuestring, MAX_SRC_DEVNAME_SIZE - 1);
     return 0;
 }
 
 
 static int pc_set_rule_config(cJSON *data_obj, char add)
 {
-    int i, j;
+    int i;
     cJSON *arr = NULL;
     if (!data_obj) {
         PC_ERROR("data obj is null\n");

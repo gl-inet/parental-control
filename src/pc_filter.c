@@ -342,7 +342,6 @@ int pc_match_one(flow_info_t *flow, pc_app_t *node)
 static int app_in_rule(u_int32_t app, pc_rule_t *rule)
 {
     pc_app_index_t *node, *n;
-    int i;
     if (app < MAX_APP_IN_CLASS) {
         return PC_FALSE;
     }
@@ -431,6 +430,32 @@ void pc_get_smac(struct sk_buff *skb,  u8 smac[ETH_ALEN])
         memcpy(smac, &skb->cb[40], ETH_ALEN);*/
 }
 
+static int check_source_net_dev(struct sk_buff *skb)
+{
+    char nstr[MAX_SRC_DEVNAME_SIZE] = {0};
+    char *ptr;
+    char *item = NULL;
+    struct net_device *netdev = skb->dev;
+
+    if (!netdev)
+        return PC_FALSE;
+    PC_LMT_DEBUG("get package from %s\n", netdev->name);
+    if (0 == strlen(pc_src_dev)) {
+        PC_LMT_DEBUG("match any netdev\n");
+        return PC_TRUE;
+    }
+    strcpy(nstr, pc_src_dev);
+    ptr = nstr;
+    while (ptr) {
+        item = strsep(&ptr, " ");
+        if (0 == strcmp(item, netdev->name)) {
+            PC_LMT_DEBUG("match net dev %s\n", netdev->name);
+            return PC_TRUE;
+        }
+    }
+    return PC_FALSE;
+}
+
 u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
 {
     unsigned long long total_packets = 0;
@@ -440,8 +465,10 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     enum ip_conntrack_info ctinfo;
     struct nf_conn *ct = NULL;
     enum pc_action action;
-
-
+    if (!check_source_net_dev(skb)) {
+        ret = NF_ACCEPT;
+        goto EXIT;
+    }
     ct = nf_ct_get(skb, &ctinfo);
     /*if (ct) {
         PC_LMT_DEBUG("ctinfo %d\n", ctinfo);

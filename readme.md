@@ -81,8 +81,11 @@ When you see the **/proc/parents-control/** folder created, it means the program
 
 **/proc/parental-control/drop_anonymous** will show the Internet status of the anonymous device.
 
+**/proc/parental-control/src_dev** will show  the network interface to be matched.
+
 ### use the app feature library
 **/proc/parental-control/app** show the currently loaded app feature library, which we can use in rule by id, for example
+
 ```
 uci add_list parental_control.myrule.apps='1001'
 uci add_list parental_control.myrule.apps='1002'
@@ -109,6 +112,7 @@ Configure applications in the /etc/config/parental_contorl file. The configurati
 | enable         | Y        | Boolean; Whether to enable the application                   |
 | drop_anonymous | Y        | Boolean; Whether to deny anonymous devices access to the Internet |
 | auto_update    | Y        | Boolean; Whether to automatically update the APP feature library |
+| src_dev        | N        | List; By default, the packets sent from all network interfaces are matched. If **src_dev** is specified, only the packets sent from a specific network interface are matched |
 | update_time    | N        | String; Update time of APP feature library                   |
 | update_url     | N        | String; Get the update URL of APP feature library            |
 | enable_app     | N        | Boolean; Use it for glinet UI                                |

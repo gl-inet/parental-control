@@ -6,24 +6,23 @@
 local M = {}
 
 local uci = require "uci"
-local rpc = require "oui.rpc"
 local utils = require "oui.utils"
 
 local function apply()
     os.execute("/etc/init.d/parental_control restart")
 end
 
-function file_exists(path)
+local function file_exists(path)
     local file = io.open(path, "rb")
     if file then file:close() end
     return file ~= nil
 end
 
-function random_uci_section(uci_cursor,uci_type)
+local function random_uci_section(uci_cursor,uci_type)
     local n
     local section
     math.randomseed(os.time())
-    for i=1,1000,1 do
+    for _=1,1000,1 do
         n = math.random(1000000,9999999)
         section = uci_type .. tostring(n)
         if not uci_cursor:get("parental_control", section) then
@@ -31,6 +30,23 @@ function random_uci_section(uci_cursor,uci_type)
         end
     end
     return nil
+end
+
+local function remove_mac_from_group(c,mac)
+    c:foreach("parental_control", "group", function(s)
+        if s.macs and type(s.macs) == "table" and #s.macs ~= 0  then
+            for i = 1, #s.macs do
+                if string.upper(s.macs[i]) == mac then
+                    table.remove(s.macs,i)
+                    if #s.macs ~= 0 then
+                        c:set("parental_control", s[".name"], "macs", s.macs)
+                    else
+                        c:delete("parental_control", s[".name"], "macs")
+                    end
+                end
+            end
+        end
+    end)
 end
 
 --[[
@@ -42,7 +58,7 @@ end
     @out number  apps.id   应用id，全局唯一,应用ID从1001开始，0-1000为特殊ID，保留使用，其中1-8是类型ID，如果设置该ID则表示该类型下所有的应用。
     @out string  apps.name   应用名字。
     @out number  apps.type   应用类型（1:社交类，2:游戏类，3:视频类，4:购物类，5:音乐类，6:招聘类，7:下载类，8:门户网站）。
-    
+
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_app_list"]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"apps":[{"id":8001,"name":"baidu","type":8,},{"id":1002,"name":"facebook","type":1,}]}}
@@ -161,8 +177,8 @@ M.remove_group = function(params)
         c:delete("parental_control", params.id)
     end
     c:foreach("parental_control", "schedule", function(s)
-        if s.group and s.group ==params.id then 
-            c:delete("parental_control", s[".name"]) 
+        if s.group and s.group ==params.id then
+            c:delete("parental_control", s[".name"])
         end
     end)
     c:commit("parental_control")
@@ -225,7 +241,7 @@ M.set_group = function(params)
     if params.schedules ~= nil then
         -- 先删除旧的日程
         c:foreach("parental_control", "schedule", function(s)
-          if s.group and s.group ==params.id then 
+          if s.group and s.group ==params.id then
               c:delete("parental_control", s[".name"])
           end
         end)
@@ -333,7 +349,7 @@ M.remove_rule = function(params)
             err_code = -1,
             err_msg = "parameter missing"
         }
-    end   
+    end
     local c = uci.cursor()
 
     local ret = {}
@@ -410,16 +426,16 @@ M.set_rule = function(params)
     return {}
 end
 
-function key_in_array(list,key)
+local function key_in_array(list,key)
     if list then
-        for k, v in pairs(list) do
+        for k, _ in pairs(list) do
           if k == key then
            return true
           end
         end
     end
-end 
-  
+end
+
 --[[
     @method-type: call
     @method-name: get_config
@@ -625,11 +641,11 @@ M.get_brief = function(params)
     local ret = {}
     local c = uci.cursor()
     local sid = params.group_id
-    local time = c:get("parental_control", sid, "brief_time") 
+    local time = c:get("parental_control", sid, "brief_time")
 
     if time ~= nil then
         ret["enable"] = true
-        ret["rule_id"] = c:get("parental_control", sid, "brief_rule") 
+        ret["rule_id"] = c:get("parental_control", sid, "brief_rule")
         if time == "0" then
             ret["manual_stop"] = true
         else
@@ -653,14 +669,14 @@ end
     @out string   groups.id    分组ID。
     @out string   groups.rule  当前正在使用的规则ID。
     @out bool   ?groups.brief  是否正在使用临时规则。
-    @in string   ?schedule_id  正在使用的日程ID，如果没有返回则表示当前使用的规则为默认规则或临时规则。
+    @out string   ?schedule_id  正在使用的日程ID，如果没有返回则表示当前使用的规则为默认规则或临时规则。
     @out number ?err_code     错误码(-1: 缺少必须参数)
     @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","get_status"]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"time_valid":true,groups:[{"id":"cfg1356","rule":"drop","brief":false}]}
 --]]
-M.get_status = function(params)
+M.get_status = function()
     local ret = {}
     local groups = {}
     local c = uci.cursor()
@@ -687,7 +703,7 @@ M.get_status = function(params)
                 local sch_id = utils.readfile("/var/run/pc_schedule/" .. fields[1]);
                 if sch_id then
                     group["schedule_id"] = string.gsub(sch_id, "\n", "")
-                end 
+                end
             end
         end
       end
@@ -700,7 +716,7 @@ end
     @method-type: call
     @method-name: update
     @method-desc: 手动更新特征库。
-    
+
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","update"]}
     @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}

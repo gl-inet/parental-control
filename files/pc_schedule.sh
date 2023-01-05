@@ -210,7 +210,7 @@ check_ntp_valid()
     done
 }
 
-check_ntp_valid
+#check_ntp_valid
 config_load parental_control
 init_parental_control
 while true;do

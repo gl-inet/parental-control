@@ -124,6 +124,10 @@ M.add_group = function(params)
     c:set("parental_control", sid, "name", params.name)
     c:set("parental_control", sid, "default_rule", params.default_rule)
     if type(params.macs) == "table" and #params.macs ~= 0  then
+        for i = 1, #params.macs do
+            params.macs[i] = string.upper(params.macs[i])
+            remove_mac_from_group(c,params.macs[i])
+        end
         c:set("parental_control", sid, "macs",params.macs)
     end
     if type(params.schedules) == "table" and #params.schedules ~= 0  then
@@ -231,6 +235,10 @@ M.set_group = function(params)
     -- 如果传递了macs参数则进行修改
     if params.macs ~= nil then
       if type(params.macs) == "table" and #params.macs ~= 0  then
+        for i = 1, #params.macs do
+            params.macs[i] = string.upper(params.macs[i])
+            remove_mac_from_group(c,params.macs[i])
+        end
         c:set("parental_control", sid, "macs",params.macs)
       else
         c:delete("parental_control", sid, "macs")

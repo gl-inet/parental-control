@@ -388,7 +388,6 @@ static int rule_proc_show(struct seq_file *s, void *v)
 {
     pc_rule_t *rule = NULL, *n;
     pc_app_index_t *index = NULL, *index_n;
-    int i = 0;
     seq_printf(s, "ID\tAction\tRefer_count\tAPPs\n");
     pc_policy_read_lock();
     if (!list_empty(&pc_rule_head)) {
@@ -455,6 +454,17 @@ static int app_proc_open(struct inode *inode, struct file *file)
     return single_open(file, app_proc_show, NULL);
 }
 
+static int src_dev_show(struct seq_file *s, void *v)
+{
+    seq_printf(s, "%s\n", pc_src_dev);
+    return 0;
+}
+
+static int src_dev_proc_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, src_dev_show, NULL);
+}
+
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 5, 0)
 static const struct file_operations pc_app_fops = {
     .owner = THIS_MODULE,
@@ -480,6 +490,13 @@ static const struct file_operations pc_group_fops = {
 static const struct file_operations pc_drop_anonymous_fops = {
     .owner = THIS_MODULE,
     .open = drop_anonymous_proc_open,
+    .read = seq_read,
+    .llseek = seq_lseek,
+    .release = seq_release_private,
+};
+static const struct file_operations pc_src_dev_fops = {
+    .owner = THIS_MODULE,
+    .open = src_dev_proc_open,
     .read = seq_read,
     .llseek = seq_lseek,
     .release = seq_release_private,
@@ -513,6 +530,13 @@ static const struct proc_ops pc_drop_anonymous_fops = {
     .proc_lseek = seq_lseek,
     .proc_release = seq_release_private,
 };
+static const struct proc_ops pc_src_dev_fops = {
+    .proc_flags = PROC_ENTRY_PERMANENT,
+    .proc_read = seq_read,
+    .proc_open = src_dev_proc_open,
+    .proc_lseek = seq_lseek,
+    .proc_release = seq_release_private,
+};
 #endif
 
 
@@ -529,6 +553,7 @@ int pc_init_procfs(void)
     proc_create("group", 0644, proc, &pc_group_fops);
     proc_create("app", 0644, proc, &pc_app_fops);
     proc_create("drop_anonymous", 0644, proc, &pc_drop_anonymous_fops);
+    proc_create("src_dev", 0644, proc, &pc_src_dev_fops);
     return 0;
 }
 

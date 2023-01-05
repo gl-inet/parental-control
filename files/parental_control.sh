@@ -53,8 +53,9 @@ config_apply()
 
 load_base_config()
 {
-    local drop_anonymous
+    local drop_anonymous src_dev
     config_get drop_anonymous "global" "drop_anonymous" "0"
+    config_get src_dev "global" "src_dev"
     config_get UPDATE_TIME "global" "update_time"
     config_get UPDATE_URL "global" "update_url"
     config_get UPDATE_EN "global" "auto_update" "0"
@@ -63,6 +64,7 @@ load_base_config()
     json_add_int "op" $SET_BASE
     json_add_object "data"
     json_add_int "drop_anonymous" $drop_anonymous
+    json_add_string "src_dev" "$src_dev"
     json_str=`json_dump`
     config_apply "$json_str"
     json_cleanup

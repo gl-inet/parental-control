@@ -195,7 +195,75 @@ out:
     return ret;
 }
 
-int add_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const char *rule_id)
+static void group_init_list(pc_group_t *group)
+{
+    group->macs.next = &group->macs;
+    group->macs.prev = &group->macs;
+}
+
+static void group_clean_list(pc_group_t *group)
+{
+    pc_mac_t *mac;
+    while (!list_empty(&group->macs)) {
+        mac = list_first_entry(&group->macs, pc_mac_t, head);
+        list_del(&(mac->head));
+        kfree(mac);
+    }
+}
+
+static int mac_to_hex(const char *mac, u8 *mac_hex)
+{
+    u32 mac_tmp[ETH_ALEN];
+    int ret = 0, i = 0;
+    ret = sscanf(mac, "%02x:%02x:%02x:%02x:%02x:%02x",
+                 (unsigned int *)&mac_tmp[0],
+                 (unsigned int *)&mac_tmp[1],
+                 (unsigned int *)&mac_tmp[2],
+                 (unsigned int *)&mac_tmp[3],
+                 (unsigned int *)&mac_tmp[4],
+                 (unsigned int *)&mac_tmp[5]);
+    if (ETH_ALEN != ret)
+        return -1;
+    for (i = 0; i < ETH_ALEN; i++) {
+        mac_hex[i] = mac_tmp[i];
+    }
+    return 0;
+}
+
+static int group_add_mac_item(pc_group_t *group, const char *str)
+{
+    pc_mac_t *node = NULL;
+    node = kzalloc(sizeof(pc_mac_t), GFP_KERNEL);
+    if (node == NULL) {
+        printk("malloc mac node memory error\n");
+        return -1;
+    } else {
+        if (!mac_to_hex(str, node->mac)) {
+            list_add(&(node->head), &group->macs);
+        } else {
+            kfree(node);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void group_add_macs(pc_group_t *group, cJSON *list)
+{
+    int size, j;
+    cJSON *item = NULL;
+    if (list) {
+        size = cJSON_GetArraySize(list);
+        for (j = 0; j < size; j++) {
+            item = cJSON_GetArrayItem(list, j);
+            if (item) {
+                group_add_mac_item(group, item->valuestring);
+            }
+        }
+    }
+}
+
+int add_pc_group(const char *id,  cJSON *macs, const char *rule_id)
 {
     pc_group_t *group = NULL;
     pc_rule_t *rule = NULL;
@@ -205,7 +273,8 @@ int add_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const cha
         return -1;
     } else {
         memcpy(group->id, id, GROUP_ID_SIZE);
-        memcpy(group->macs, macs, sizeof(group->macs));
+        group_init_list(group);
+        group_add_macs(group, macs);
         rule = find_rule_by_id(rule_id);
         group->rule = rule;
         pc_policy_write_lock();
@@ -229,6 +298,7 @@ int remove_pc_group(const char *id)
                 pc_policy_write_lock();
                 if (rule)
                     rule->refer_count -= 1;
+                group_clean_list(group);
                 list_del(&group->head);
                 kfree(group);
                 pc_policy_write_unlock();
@@ -249,6 +319,7 @@ int clean_pc_group(void)
             rule = group->rule;
             if (rule)
                 rule->refer_count -= 1;
+            group_clean_list(group);
             list_del(&group->head);
             kfree(group);
         }
@@ -257,7 +328,7 @@ int clean_pc_group(void)
     return 0;
 }
 
-int set_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const char *rule_id)
+int set_pc_group(const char *id,  cJSON *macs, const char *rule_id)
 {
     pc_group_t *group = NULL, *n;
     pc_rule_t *rule = NULL;
@@ -268,7 +339,8 @@ int set_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const cha
             if (strcmp(group->id, id) == 0) {
                 PC_DEBUG("match group %s\n", group->id);
                 pc_policy_write_lock();
-                memcpy(group->macs, macs, sizeof(group->macs));
+                group_clean_list(group);
+                group_add_macs(group, macs);
                 if (group->rule)
                     group->rule->refer_count -= 1;//减少旧规则的引用计数
                 group->rule = rule;
@@ -284,12 +356,14 @@ int set_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const cha
 static pc_group_t *_find_group_by_mac(u8 mac[ETH_ALEN])
 {
     pc_group_t *group = NULL, *n;
-    int i = 0;
+    pc_mac_t *nmac = NULL, *nmac_n;
     if (!list_empty(&pc_group_head)) {
         list_for_each_entry_safe(group, n, &pc_group_head, head) {
-            for (i = 0; i < MAX_MAC_IN_GROUP; i++) {
-                if (ether_addr_equal(group->macs[i], mac)) {
-                    return group;
+            if (!list_empty(&group->macs)) {
+                list_for_each_entry_safe(nmac, nmac_n, &group->macs, head) {
+                    if (ether_addr_equal(nmac->mac, mac)) {
+                        return group;
+                    }
                 }
             }
         }
@@ -415,16 +489,16 @@ static int rule_proc_open(struct inode *inode, struct file *file)
 static int group_proc_show(struct seq_file *s, void *v)
 {
     pc_group_t *group = NULL, *n;
-    int i = 0;
+    pc_mac_t *mac = NULL, *mac_n;
     seq_printf(s, "ID\tRule_ID\tMACs\n");
     pc_policy_read_lock();
     if (!list_empty(&pc_group_head)) {
         list_for_each_entry_safe(group, n, &pc_group_head, head) {
             seq_printf(s, "%s\t%s\t[ ", group->id, group->rule ? group->rule->id : "NULL");
-            for (i = 0; i < MAX_MAC_IN_GROUP; i++) {
-                if (is_zero_ether_addr(group->macs[i]))
-                    break;
-                seq_printf(s, "%pM ", group->macs[i]);
+            if (!list_empty(&group->macs)) {
+                list_for_each_entry_safe(mac, mac_n, &group->macs, head) {
+                    seq_printf(s, "%pM ", mac->mac);
+                }
             }
             seq_printf(s, "]\n");
         }

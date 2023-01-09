@@ -8,7 +8,6 @@
 #define NF_ACCEPT_BIT 0x40000000
 #define BLIST_ID 0xffffffff
 #define MAX_HC_CLIENT_HASH_SIZE 128
-#define MAX_MAC_IN_GROUP 128
 #define MAX_DPI_PKT_NUM 64
 #define MIN_HTTP_DATA_LEN 16
 #define MAX_APP_NAME_LEN 64
@@ -166,10 +165,15 @@ typedef struct pc_rule {
     struct list_head  		applist;
 } pc_rule_t;
 
+typedef struct pc_mac {
+    struct list_head  		head;
+    u8 mac[ETH_ALEN];
+} pc_mac_t;
+
 typedef struct pc_group {
     struct list_head head;
     char id[GROUP_ID_SIZE];
-    u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN];
+    struct list_head macs;
     pc_rule_t *rule;
 } pc_group_t;
 
@@ -202,8 +206,8 @@ extern int add_pc_rule(const char *id, cJSON *applist, enum pc_action action, cJ
 extern int set_pc_rule(const char *id, cJSON *applist, enum pc_action action, cJSON *blist);
 extern int clean_pc_rule(void);
 
-extern int add_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const char *rule_id);
-extern int set_pc_group(const char *id,  u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN], const char *rule_id);
+extern int add_pc_group(const char *id,  cJSON *macs, const char *rule_id);
+extern int set_pc_group(const char *id,  cJSON *macs, const char *rule_id);
 extern int clean_pc_group(void);
 extern pc_group_t *find_group_by_mac(u8 mac[ETH_ALEN]);
 extern enum pc_action get_action_by_mac(u8 mac[ETH_ALEN]);

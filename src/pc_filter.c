@@ -142,7 +142,7 @@ void dpi_http_proto(flow_info_t *flow)
         }
     }
 }
-
+/*
 static void dump_http_flow_info(http_proto_t *http)
 {
     if (!http) {
@@ -182,6 +182,7 @@ static void dump_https_flow_info(https_proto_t *https)
 
     printk("--------------------------------------------------------\n\n\n");
 }
+
 static void dump_flow_info(flow_info_t *flow)
 {
     if (!flow) {
@@ -206,7 +207,7 @@ static void dump_flow_info(flow_info_t *flow)
         }
     }
 }
-
+*/
 int pc_match_port(port_info_t *info, int port)
 {
     int i;
@@ -458,7 +459,6 @@ static int check_source_net_dev(struct sk_buff *skb)
 
 u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
 {
-    unsigned long long total_packets = 0;
     u_int32_t ret;
     flow_info_t flow;
     pc_rule_t *rule;

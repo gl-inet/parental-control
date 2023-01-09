@@ -247,7 +247,7 @@ int regexp_match(char *reg, char *text)
     }
 
     do {
-        if (ret = matchhere(regexp, text)) {
+        if ((ret = matchhere(regexp, text))) {
             goto out;
         }
     } while (*text++ != '\0');

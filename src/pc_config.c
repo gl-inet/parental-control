@@ -38,24 +38,6 @@ enum PC_CONFIG_CMD {
     PC_CMD_SET_GROUP,
 };
 
-static int mac_to_hex(u8 *mac, u8 *mac_hex)
-{
-    u32 mac_tmp[ETH_ALEN];
-    int ret = 0, i = 0;
-    ret = sscanf(mac, "%02x:%02x:%02x:%02x:%02x:%02x",
-                 (unsigned int *)&mac_tmp[0],
-                 (unsigned int *)&mac_tmp[1],
-                 (unsigned int *)&mac_tmp[2],
-                 (unsigned int *)&mac_tmp[3],
-                 (unsigned int *)&mac_tmp[4],
-                 (unsigned int *)&mac_tmp[5]);
-    if (ETH_ALEN != ret)
-        return -1;
-    for (i = 0; i < ETH_ALEN; i++) {
-        mac_hex[i] = mac_tmp[i];
-    }
-    return 0;
-}
 
 static int pc_set_base_config(cJSON *data_obj)
 {
@@ -126,7 +108,7 @@ static int pc_set_rule_config(cJSON *data_obj, char add)
 
 static int pc_set_group_config(cJSON *data_obj, char add)
 {
-    int i, j;
+    int i;
     cJSON *arr = NULL;
     if (!data_obj) {
         PC_ERROR("data obj is null\n");
@@ -138,8 +120,7 @@ static int pc_set_group_config(cJSON *data_obj, char add)
         return -1;
     }
     for (i = 0; i < cJSON_GetArraySize(arr); i++) {
-        u8 macs[MAX_MAC_IN_GROUP][ETH_ALEN] = {0};
-        cJSON *group_obj = NULL, *id_obj = NULL, *rule_obj = NULL, *macs_obj = NULL, *mac_obj = NULL;
+        cJSON *group_obj = NULL, *id_obj = NULL, *rule_obj = NULL, *macs_obj = NULL;
         group_obj = cJSON_GetArrayItem(arr, i);
         if (!group_obj) {
             PC_ERROR("no group fund\n");
@@ -156,21 +137,10 @@ static int pc_set_group_config(cJSON *data_obj, char add)
             return -1;
         }
         macs_obj = cJSON_GetObjectItem(group_obj, "macs");
-        if (macs_obj) {
-            for (j = 0; j < cJSON_GetArraySize(macs_obj) && j < MAX_MAC_IN_GROUP; j++) {
-                mac_obj = cJSON_GetArrayItem(macs_obj, j);
-                if (mac_obj) {
-                    u8 mac_hex[ETH_ALEN] = {0};
-                    if (!mac_to_hex(mac_obj->valuestring, mac_hex)) {
-                        ether_addr_copy(macs[j], mac_hex);
-                    }
-                }
-            }
-        }
         if (add)
-            add_pc_group(id_obj->valuestring, macs, rule_obj->valuestring);
+            add_pc_group(id_obj->valuestring, macs_obj, rule_obj->valuestring);
         else
-            set_pc_group(id_obj->valuestring, macs, rule_obj->valuestring);
+            set_pc_group(id_obj->valuestring, macs_obj, rule_obj->valuestring);
     }
 
     return 0;

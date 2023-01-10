@@ -512,16 +512,19 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     }
 
     if (rule == NULL) {
+        PC_LMT_DEBUG("from mac %pM rule is NULL,ACCEPT\n", flow.smac);
         ret = NF_ACCEPT;
         goto EXIT;
     }
 
     if (parse_flow_proto(skb, &flow) < 0) {
+        PC_LMT_DEBUG("from mac %pM parese proto failed, ACCEPT\n", flow.smac);
         ret = NF_ACCEPT;
         goto EXIT;
     }
 
     if (0 != dpi_main(skb, &flow)) {
+        PC_LMT_DEBUG("from mac %pM dpi failed, ACCEPT\n", flow.smac);
         ret = NF_ACCEPT;
         goto EXIT;
     }
@@ -529,11 +532,11 @@ u_int32_t pc_filter_hook_handle(struct sk_buff *skb, struct net_device *dev)
     app_filter_match(&flow, rule);
 
     if (flow.app_id != 0) {
-        PC_LMT_INFO("match %s %pI4(%d)--> %pI4(%d) len = %d, %d\n ", IPPROTO_TCP == flow.l4_protocol ? "tcp" : "udp",
-                    &flow.src, flow.sport, &flow.dst, flow.dport, skb->len, flow.app_id);
+        PC_LMT_DEBUG("match %s %pI4(%d)--> %pI4(%d) len = %d, %d\n ", IPPROTO_TCP == flow.l4_protocol ? "tcp" : "udp",
+                     &flow.src, flow.sport, &flow.dst, flow.dport, skb->len, flow.app_id);
     }
     if (flow.drop) {
-        PC_LMT_INFO("##Drop app %s flow, appid is %d\n", flow.app_name, flow.app_id);
+        PC_LMT_DEBUG("Drop app %s flow, appid is %d\n", flow.app_name, flow.app_id);
         ret =  NF_DROP;
         goto EXIT;
     }
@@ -583,6 +586,42 @@ static struct nf_hook_ops pc_filter_ops[] __read_mostly = {
 };
 #endif
 
+#ifdef CONFIG_SHORTCUT_FE
+extern int (*gl_parental_control_handle)(struct sk_buff *skb);
+static int pc_handle_shortcut_fe(struct sk_buff *skb)
+{
+    switch (pc_filter_hook_handle(skb, skb->dev)) {
+        case NF_ACCEPT:
+            return NET_RX_SUCCESS;
+        case NF_DROP:
+            return NET_RX_DROP;
+        default:
+            return NET_RX_SUCCESS;
+    }
+}
+static void pc_rpc_pointer_init(void)
+{
+    int (*test)(struct sk_buff * skb);
+    rcu_read_lock();
+    test = rcu_dereference(gl_parental_control_handle);
+    rcu_read_unlock();
+    if (!test) {
+        RCU_INIT_POINTER(gl_parental_control_handle, pc_handle_shortcut_fe);
+    }
+
+}
+
+static void pc_rpc_pointer_exit(void)
+{
+    RCU_INIT_POINTER(gl_parental_control_handle, NULL);
+    //wait for all rcu call complete
+    rcu_barrier();
+}
+#else
+static void pc_rpc_pointer_init(void) {}
+static void pc_rpc_pointer_exit(void) {}
+#endif
+
 int pc_filter_init(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)
@@ -590,11 +629,13 @@ int pc_filter_init(void)
 #else
     nf_register_hooks(pc_filter_ops, ARRAY_SIZE(pc_filter_ops));
 #endif
+    pc_rpc_pointer_init();
     return 0;
 }
 
 void pc_filter_exit(void)
 {
+    pc_rpc_pointer_exit();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)
     nf_unregister_net_hooks(&init_net, pc_filter_ops, ARRAY_SIZE(pc_filter_ops));
 #else

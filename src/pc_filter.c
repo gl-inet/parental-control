@@ -588,8 +588,32 @@ static struct nf_hook_ops pc_filter_ops[] __read_mostly = {
 
 #ifdef CONFIG_SHORTCUT_FE
 extern int (*gl_parental_control_handle)(struct sk_buff *skb);
+extern int (*athrs_fast_nat_recv)(struct sk_buff *skb);
 static int pc_handle_shortcut_fe(struct sk_buff *skb)
 {
+    int (*fast_recv)(struct sk_buff * skb);
+    const struct iphdr *iph = ip_hdr(skb);
+    struct rtable *rt;
+    int err;
+
+    rcu_read_lock();
+    fast_recv = rcu_dereference(athrs_fast_nat_recv);
+    rcu_read_unlock();
+    if (!fast_recv)//no shortcut module installed
+        return NET_RX_SUCCESS;
+
+    err = ip_route_input_noref(skb, iph->daddr, iph->saddr,
+                               iph->tos, skb->dev);
+    if (unlikely(err))
+        return NET_RX_SUCCESS;
+    rt = skb_rtable(skb);
+    if (rt == NULL)
+        return NET_RX_SUCCESS;
+    if (rt->rt_type == RTN_MULTICAST || rt->rt_type ==  RTN_BROADCAST
+            || rt->rt_type ==  RTN_LOCAL) {
+        return NET_RX_SUCCESS;
+    }
+
     switch (pc_filter_hook_handle(skb, skb->dev)) {
         case NF_ACCEPT:
             return NET_RX_SUCCESS;
@@ -608,7 +632,6 @@ static void pc_rpc_pointer_init(void)
     if (!test) {
         RCU_INIT_POINTER(gl_parental_control_handle, pc_handle_shortcut_fe);
     }
-
 }
 
 static void pc_rpc_pointer_exit(void)

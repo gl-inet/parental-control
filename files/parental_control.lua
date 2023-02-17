@@ -32,6 +32,15 @@ local function random_uci_section(uci_cursor,uci_type)
     return nil
 end
 
+local function check_domains_valid(domains)
+    for i = 1, #domains do
+        if #domains[i] > 253 then
+            return false
+        end
+    end
+    return true
+end
+
 local function remove_mac_from_group(c,mac)
     c:foreach("parental_control", "group", function(s)
         if s.macs and type(s.macs) == "table" and #s.macs ~= 0  then
@@ -304,7 +313,7 @@ end
     @in array   ?blacklist   规则集的黑名单列表，为字符串类型，该列表遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
     @out number id     新建规则的ID
-    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out number ?err_code     错误码(-1: 缺少必须参数, -2: blacklist中的域名不合法)
     @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","add_rule",{"name":"rule1","color":"#aabbccddee","apps":[1001,2002],"blacklist":["[tcp;;;www.google.com;;]"]}]}
@@ -329,6 +338,12 @@ M.add_rule = function(params)
         c:set("parental_control", sid, "apps",params.apps)
     end
     if type(params.blacklist) == "table" and #params.blacklist ~= 0  then
+        if not check_domains_valid(params.blacklist) then
+            return {
+                err_code = -2,
+                err_msg = "domain invalid"
+            }
+        end
         c:set("parental_control", sid, "blacklist",params.blacklist)
     end
     c:set("parental_control", sid, "action", "POLICY_DROP")
@@ -402,7 +417,7 @@ end
     @in array   apps   规则集包含的应用的ID或应用类型，为整数类型，应用和ID的对应关系通过get_app_list接口返回。
     @in array   ?blacklist   规则集的例外列表，为字符串类型，该列表相对于apps参数例外，一个规则集中最多添加32个例外特征, 遵循应用特征描述语法，应用特征描述语法请参见doc.gl-inet.com
 
-    @out number ?err_code     错误码(-1: 缺少必须参数)
+    @out number ?err_code     错误码(-1: 缺少必须参数, -2: blacklist中的域名不合法)
     @out string ?err_msg      错误信息
 
     @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","parental-control","set_rule",{"id":"cfga067b","name":"rule1","color":"#aabbccddee","apps":[1001,2002],"blacklist":["[tcp;;;www.google.com;;]"]}]}
@@ -424,6 +439,12 @@ M.set_rule = function(params)
         c:set("parental_control", sid, "apps",params.apps)
     end
     if type(params.blacklist) == "table" and #params.blacklist ~= 0  then
+        if not check_domains_valid(params.blacklist) then
+            return {
+                err_code = -2,
+                err_msg = "domain invalid"
+            }
+        end
         c:set("parental_control", sid, "blacklist",params.blacklist)
     else
         c:delete("parental_control", sid, "blacklist")

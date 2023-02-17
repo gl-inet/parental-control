@@ -35,7 +35,7 @@ end
 local function remove_mac_from_group(c,mac)
     c:foreach("parental_control", "group", function(s)
         if s.macs and type(s.macs) == "table" and #s.macs ~= 0  then
-            for i = 1, #s.macs do
+            for i = #s.macs, 1, -1 do -- 必须从后往前遍历，否则删除时由于数组长度变化将导致错误
                 if string.upper(s.macs[i]) == mac then
                     table.remove(s.macs,i)
                     if #s.macs ~= 0 then

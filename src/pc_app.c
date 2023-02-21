@@ -156,8 +156,8 @@ static int parse_app_str(pc_app_t *app, int appid, const char *name, const char 
     char src_port_str[16] = {0};
     port_info_t dport_info;
     char dst_port_str[16] = {0};
-    char host_url[32] = {0};
-    char request_url[128] = {0};
+    char host_url[MAX_HOST_URL_LEN] = {0};
+    char request_url[MAX_REQUEST_URL_LEN] = {0};
     char dict[128] = {0};
     int proto = IPPROTO_TCP;
     const char *p = feature;
@@ -170,7 +170,6 @@ static int parse_app_str(pc_app_t *app, int appid, const char *name, const char 
         PC_ERROR("error, name or feature is null\n");
         return -1;
     }
-    // tcp;8000;www.sina.com;0:get_name;00:0a-01:11
     memset(&dport_info, 0x0, sizeof(dport_info));
     while (*p++) {
         if (*p != ';')
@@ -179,21 +178,21 @@ static int parse_app_str(pc_app_t *app, int appid, const char *name, const char 
         switch (param_num) {
 
             case PC_PROTO_PARAM_INDEX:
-                strncpy(proto_str, begin, p - begin);
+                strncpy(proto_str, begin, min(p - begin, sizeof(proto_str) - 1));
                 break;
             case PC_SRC_PORT_PARAM_INDEX:
-                strncpy(src_port_str, begin, p - begin);
+                strncpy(src_port_str, begin, min(p - begin, sizeof(src_port_str) - 1));
                 break;
             case PC_DST_PORT_PARAM_INDEX:
-                strncpy(dst_port_str, begin, p - begin);
+                strncpy(dst_port_str, begin, min(p - begin, sizeof(dst_port_str) - 1));
                 break;
 
             case PC_HOST_URL_PARAM_INDEX:
-                strncpy(host_url, begin, p - begin);
+                strncpy(host_url, begin, min(p - begin, sizeof(host_url) - 1));
                 break;
 
             case PC_REQUEST_URL_PARAM_INDEX:
-                strncpy(request_url, begin, p - begin);
+                strncpy(request_url, begin, min(p - begin, sizeof(request_url) - 1));
                 break;
         }
         param_num++;
@@ -203,7 +202,7 @@ static int parse_app_str(pc_app_t *app, int appid, const char *name, const char 
         PC_ERROR("invalid feature:%s\n", feature);
         return -1;
     }
-    strncpy(dict, begin, p - begin);
+    strncpy(dict, begin, min(p - begin, sizeof(dict) - 1));
 
     if (0 == strcmp(proto_str, "tcp"))
         proto = IPPROTO_TCP;

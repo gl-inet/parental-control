@@ -142,72 +142,7 @@ void dpi_http_proto(flow_info_t *flow)
         }
     }
 }
-/*
-static void dump_http_flow_info(http_proto_t *http)
-{
-    if (!http) {
-        PC_ERROR("http ptr is NULL\n");
-        return;
-    }
-    if (!http->match)
-        return;
-    if (http->method == HTTP_METHOD_GET) {
-        printk("Http method: " HTTP_GET_METHOD_STR "\n");
-    } else if (http->method == HTTP_METHOD_POST) {
-        printk("Http method: " HTTP_POST_METHOD_STR "\n");
-    }
-    if (http->url_len > 0 && http->url_pos) {
-        dump_str("Request url", http->url_pos, http->url_len);
-    }
 
-    if (http->host_len > 0 && http->host_pos) {
-        dump_str("Host", http->host_pos, http->host_len);
-    }
-
-    printk("--------------------------------------------------------\n\n\n");
-}
-
-static void dump_https_flow_info(https_proto_t *https)
-{
-    if (!https) {
-        PC_ERROR("https ptr is NULL\n");
-        return;
-    }
-    if (!https->match)
-        return;
-
-    if (https->url_len > 0 && https->url_pos) {
-        dump_str("https server name", https->url_pos, https->url_len);
-    }
-
-    printk("--------------------------------------------------------\n\n\n");
-}
-
-static void dump_flow_info(flow_info_t *flow)
-{
-    if (!flow) {
-        PC_ERROR("flow is null\n");
-        return;
-    }
-    if (flow->l4_len > 0) {
-        PC_LMT_INFO("src=" NIPQUAD_FMT ",dst=" NIPQUAD_FMT ",sport: %d, dport: %d, data_len: %d\n",
-                    NIPQUAD(flow->src), NIPQUAD(flow->dst), flow->sport, flow->dport, flow->l4_len);
-    }
-
-    if (flow->l4_protocol == IPPROTO_TCP) {
-        if (PC_TRUE == flow->http.match) {
-            printk("-------------------http protocol-------------------------\n");
-            printk("protocol:TCP , sport: %-8d, dport: %-8d, data_len: %-8d\n",
-                   flow->sport, flow->dport, flow->l4_len);
-            dump_http_flow_info(&flow->http);
-        }
-        if (PC_TRUE == flow->https.match) {
-            printk("-------------------https protocol-------------------------\n");
-            dump_https_flow_info(&flow->https);
-        }
-    }
-}
-*/
 int pc_match_port(port_info_t *info, int port)
 {
     int i;

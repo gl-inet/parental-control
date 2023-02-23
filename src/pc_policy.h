@@ -34,13 +34,6 @@
 #define HTTP_GET_METHOD_STR "GET"
 #define HTTP_POST_METHOD_STR "POST"
 #define HTTP_HEADER "HTTP"
-#define NIPQUAD(addr) \
-	((unsigned char *)&addr)[0], \
-	((unsigned char *)&addr)[1], \
-	((unsigned char *)&addr)[2], \
-	((unsigned char *)&addr)[3]
-#define NIPQUAD_FMT "%u.%u.%u.%u"
-
 
 #define HTTPS_URL_OFFSET		9
 #define HTTPS_LEN_OFFSET		7

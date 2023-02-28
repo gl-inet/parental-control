@@ -14,7 +14,7 @@
 #define MAX_FEATURE_NUM_PER_APP 16
 #define MIN_FEATURE_STR_LEN 8
 #define MAX_FEATURE_STR_LEN 128
-#define MAX_HOST_URL_LEN 128
+#define MAX_HOST_URL_LEN 254
 #define MAX_REQUEST_URL_LEN 128
 #define MAX_FEATURE_BITS 16
 #define MAX_POS_INFO_PER_FEATURE 16
@@ -34,13 +34,6 @@
 #define HTTP_GET_METHOD_STR "GET"
 #define HTTP_POST_METHOD_STR "POST"
 #define HTTP_HEADER "HTTP"
-#define NIPQUAD(addr) \
-	((unsigned char *)&addr)[0], \
-	((unsigned char *)&addr)[1], \
-	((unsigned char *)&addr)[2], \
-	((unsigned char *)&addr)[3]
-#define NIPQUAD_FMT "%u.%u.%u.%u"
-
 
 #define HTTPS_URL_OFFSET		9
 #define HTTPS_LEN_OFFSET		7

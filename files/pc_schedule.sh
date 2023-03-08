@@ -146,10 +146,12 @@ do_set_groups_rule()
     }
     config_foreach set_groups_cb group
 
-    json_str=`json_dump`
-    [ "$change" -eq 1 ] && config_apply "$json_str"
-    json_cleanup
-    echo c >/proc/net/nf_conntrack
+    [ "$change" -eq 1 ] && {
+        json_str=`json_dump`
+        config_apply "$json_str"
+        json_cleanup
+        clean_client_conntrack
+    }
 }
 
 schedule_for_each()

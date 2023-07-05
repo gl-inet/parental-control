@@ -52,6 +52,17 @@ int parse_flow_proto(struct sk_buff *skb, flow_info_t *flow)
     return -1;
 }
 
+int is_url(const char *p, short len)
+{
+    int i = 0;
+    for (i = 0; i < len; i++) {
+        if (p[i] < 0x20 || p[i] > 0x7e) {
+            return -1;
+	}
+    }
+    return 0;
+}
+
 int dpi_https_proto(flow_info_t *flow)
 {
     int i;
@@ -81,13 +92,16 @@ int dpi_https_proto(flow_info_t *flow)
         if (p[i] == 0x0 && p[i + 1] == 0x0 && p[i + 2] == 0x0 && p[i + 3] != 0x0) {
             // 2 bytes
             memcpy(&url_len, p + i + HTTPS_LEN_OFFSET, 2);
-            if (ntohs(url_len) <= 0 || ntohs(url_len) > data_len) {
+            url_len = ntohs(url_len);
+            if (url_len <= 0 || url_len > data_len) {
                 continue;
             }
-            if (i + HTTPS_URL_OFFSET + ntohs(url_len) < data_len) {
+            if (i + HTTPS_URL_OFFSET + url_len < data_len) {
+                if (0 != is_url(p + i + HTTPS_URL_OFFSET, url_len))
+                    continue;
                 flow->https.match = PC_TRUE;
                 flow->https.url_pos = p + i + HTTPS_URL_OFFSET;
-                flow->https.url_len = ntohs(url_len);
+                flow->https.url_len = url_len;
                 return 0;
             }
         }
